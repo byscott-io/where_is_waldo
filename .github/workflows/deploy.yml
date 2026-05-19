@@ -1,0 +1,122 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      no_cache:
+        description: "Force rebuild (no effect for library publishing — present for queue-compat)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  # Publish-only library; doesn't compete with the host deploy lock. Keep
+  # a per-repo group so two concurrent dispatches of this workflow don't
+  # race on `gem push` / `npm publish`.
+  group: deploy-where-is-waldo
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish gem + npm package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read versions
+        id: versions
+        run: |
+          GEM_VERSION=$(cat VERSION | tr -d '[:space:]')
+          NPM_VERSION=$(node -p "require('./package.json').version")
+          echo "gem_version=$GEM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm_version=$NPM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Gem version: $GEM_VERSION"
+          echo "NPM version: $NPM_VERSION"
+
+      # --- Gem: publish to GitHub Packages if version not already there ---
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Check if gem version is already published
+        id: gem_check
+        env:
+          GEM_VERSION: ${{ steps.versions.outputs.gem_version }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          # Query GitHub Packages for the gem's existing versions.
+          # 200 = found; 404 = not found.
+          STATUS=$(curl -sS -o /tmp/gem_versions.json -w "%{http_code}" \
+            -H "Authorization: Bearer $GH_PAT" \
+            "https://rubygems.pkg.github.com/sevgibson/api/v1/versions/where_is_waldo.json" || true)
+          if [[ "$STATUS" == "200" ]] && grep -q "\"number\":\"$GEM_VERSION\"" /tmp/gem_versions.json; then
+            echo "Gem $GEM_VERSION already published. Skipping."
+            echo "needs_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Gem $GEM_VERSION not found in registry. Will publish."
+            echo "needs_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push gem
+        if: steps.gem_check.outputs.needs_publish == 'true'
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GEM_VERSION: ${{ steps.versions.outputs.gem_version }}
+        run: |
+          mkdir -p ~/.gem
+          cat > ~/.gem/credentials <<EOF
+          ---
+          :github: Bearer ${GH_PAT}
+          EOF
+          chmod 600 ~/.gem/credentials
+          gem build where_is_waldo.gemspec
+          gem push --key github --host https://rubygems.pkg.github.com/sevgibson \
+            "where_is_waldo-${GEM_VERSION}.gem"
+
+      # --- NPM: publish to public registry if version not already there ---
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "yarn"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Check if npm version is already published
+        id: npm_check
+        env:
+          NPM_VERSION: ${{ steps.versions.outputs.npm_version }}
+        run: |
+          # npm view returns the version string if present, empty if not.
+          PUBLISHED=$(npm view "@sevgibson/where-is-waldo@${NPM_VERSION}" version 2>/dev/null || true)
+          if [[ -n "$PUBLISHED" ]]; then
+            echo "NPM $NPM_VERSION already published. Skipping."
+            echo "needs_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "NPM $NPM_VERSION not found in registry. Will publish."
+            echo "needs_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish npm package
+        if: steps.npm_check.outputs.needs_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          yarn build
+          npm publish --access public
+
+      - name: Summary
+        run: |
+          echo "Gem $GEM_VERSION: ${{ steps.gem_check.outputs.needs_publish == 'true' && 'published' || 'already up to date' }}"
+          echo "NPM $NPM_VERSION: ${{ steps.npm_check.outputs.needs_publish == 'true' && 'published' || 'already up to date' }}"
+        env:
+          GEM_VERSION: ${{ steps.versions.outputs.gem_version }}
+          NPM_VERSION: ${{ steps.versions.outputs.npm_version }}
