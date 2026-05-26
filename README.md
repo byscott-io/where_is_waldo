@@ -18,7 +18,7 @@ Real-time presence tracking for Rails + React using ActionCable.
 
 ```ruby
 # Gemfile
-gem 'where_is_waldo', github: 'sevgibson/where_is_waldo'
+gem 'where_is_waldo', github: 'byscott-io/where_is_waldo'
 ```
 
 ```bash
@@ -31,7 +31,7 @@ rails generate where_is_waldo:install --adapter=redis --subject_column=user_id
 ```
 
 ```bash
-npm install @sevgibson/where-is-waldo @rails/actioncable
+npm install @byscott-io/where-is-waldo @rails/actioncable
 ```
 
 ### 2. Configure
@@ -49,7 +49,7 @@ end
 
 ```jsx
 // app.jsx
-import { configureCable, PresenceProvider } from '@sevgibson/where-is-waldo';
+import { configureCable, PresenceProvider } from '@byscott-io/where-is-waldo';
 
 configureCable({
   url: '/cable',
@@ -148,7 +148,7 @@ WhereIsWaldo.broadcast_to_session(session_id, :warning, { message: "..." })
 ### Client Message Handlers
 
 ```jsx
-import { configureCable, registerHandler, unregisterHandler } from '@sevgibson/where-is-waldo';
+import { configureCable, registerHandler, unregisterHandler } from '@byscott-io/where-is-waldo';
 
 // At initialization
 configureCable({
@@ -169,7 +169,7 @@ unregisterHandler('chat_message');
 ### React Hooks
 
 ```jsx
-import { usePresenceContext } from '@sevgibson/where-is-waldo';
+import { usePresenceContext } from '@byscott-io/where-is-waldo';
 
 function StatusIndicator() {
   const { connected, tabVisible, subjectActive } = usePresenceContext();

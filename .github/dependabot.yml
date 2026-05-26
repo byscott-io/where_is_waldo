@@ -2,7 +2,7 @@ version: 2
 registries:
   github-gems:
     type: rubygems-server
-    url: https://rubygems.pkg.github.com/sevgibson
+    url: https://rubygems.pkg.github.com/byscott-io
     token: ${{ secrets.GH_PRIVATE_REPO_TOKEN }}
   github-npm:
     type: npm-registry

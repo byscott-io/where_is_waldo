@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.summary = "Real-time presence tracking for Rails + React applications"
   spec.description = "Track who's online, their activity state, and broadcast messages. " \
                      "Fully configurable - works with any user model, session system, and room concept."
-  spec.homepage = "https://github.com/sevgibson/where_is_waldo"
+  spec.homepage = "https://github.com/byscott-io/where_is_waldo"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0.0"
 

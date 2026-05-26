@@ -1,6 +1,6 @@
 {
-  "name": "@sevgibson/where-is-waldo",
-  "version": "0.0.23",
+  "name": "@byscott-io/where-is-waldo",
+  "version": "0.0.24",
   "description": "Real-time presence tracking for ActionCable with React hooks",
   "main": "src/index.js",
   "module": "src/index.js",
@@ -40,7 +40,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sevgibson/where_is_waldo.git"
+    "url": "git+https://github.com/byscott-io/where_is_waldo.git"
   },
   "keywords": [
     "actioncable",
@@ -53,9 +53,9 @@
   "author": "Scott Gibson",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sevgibson/where_is_waldo/issues"
+    "url": "https://github.com/byscott-io/where_is_waldo/issues"
   },
-  "homepage": "https://github.com/sevgibson/where_is_waldo#readme",
+  "homepage": "https://github.com/byscott-io/where_is_waldo#readme",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "access": "public"
