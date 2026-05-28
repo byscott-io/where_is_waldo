@@ -62,5 +62,8 @@
   },
   "dependencies": {
     "@rails/actioncable": "^8.1.300"
+  },
+  "resolutions": {
+    "qs": "^6.15.2"
   }
 }
