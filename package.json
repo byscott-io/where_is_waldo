@@ -38,7 +38,7 @@
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "rollup": "^4.60.4",
+    "rollup": "^4.61.1",
     "start-server-and-test": "^3.0.5"
   },
   "repository": {
