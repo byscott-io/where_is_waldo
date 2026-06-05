@@ -27,10 +27,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/preset-env": "^7.29.7",
-    "@babel/preset-react": "^7.23.0",
-    "@babel/preset-env": "^7.29.5",
     "@babel/preset-react": "^7.29.7",
-    "@rollup/plugin-babel": "^7.0.0",
     "@rollup/plugin-babel": "^7.1.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
@@ -38,8 +35,8 @@
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "rollup": "^4.60.4",
-    "start-server-and-test": "^3.0.5"
+    "rollup": "^4.61.1",
+    "start-server-and-test": "^3.0.8"
   },
   "repository": {
     "type": "git",
