@@ -7,7 +7,7 @@ Real-time presence tracking for Rails + React using ActionCable.
 - **Presence tracking** - know who's online
 - **Scope-based queries** - `online(org.users.admin)`
 - **Targeted broadcasting** - send to any AR scope
-- **Message handlers** - route by message type
+- **Event subscriptions** - components subscribe by event type (`useWaldoEvent`)
 - **Activity monitoring** - tab visibility, user activity
 - **Multi-session** - same user, multiple tabs/devices
 - **Flexible storage** - database or Redis
@@ -48,7 +48,7 @@ end
 ```
 
 ```jsx
-// app.jsx
+// app.jsx — configure the connection once, wrap the app
 import { configureCable, PresenceProvider } from '@byscott-io/where-is-waldo';
 
 configureCable({
@@ -57,16 +57,23 @@ configureCable({
   presence: {
     debug: true,  // Enable console logging for troubleshooting
   },
-  handlers: {
-    notification: (data) => showToast(data.message),
-    force_logout: () => logout(),
-  }
 });
 
-// Wrap your app
 <PresenceProvider>
   <App />
 </PresenceProvider>
+```
+
+```jsx
+// any component — subscribe to an event type and filter the payload yourself.
+// Auto-unsubscribes on unmount; no central handler config.
+import { useWaldoEvent } from '@byscott-io/where-is-waldo';
+
+function Notifications() {
+  useWaldoEvent('notification', (data) => showToast(data.message));
+  useWaldoEvent('force_logout', () => logout());
+  return null;
+}
 ```
 
 ### 3. Use
@@ -145,25 +152,38 @@ WhereIsWaldo.broadcast_to(user, :force_logout, {})
 WhereIsWaldo.broadcast_to_session(session_id, :warning, { message: "..." })
 ```
 
-### Client Message Handlers
+### Client Event Subscriptions
+
+Components subscribe to a raw event **type** with the `useWaldoEvent` hook,
+receive the payload, and decide for themselves whether it's relevant. The
+subscription auto-unsubscribes on unmount — there is no central handler
+registry. Adding a new event = a server `broadcast_to` + a `useWaldoEvent`
+call in whatever component cares.
 
 ```jsx
-import { configureCable, registerHandler, unregisterHandler } from '@byscott-io/where-is-waldo';
+import { useWaldoEvent } from '@byscott-io/where-is-waldo';
 
-// At initialization
-configureCable({
-  url: '/cable',
-  getToken: () => getAuthToken(),
-  handlers: {
-    notification: (data) => showToast(data.message),
-    force_logout: () => logout(),
-    data_refresh: (data) => refetch(data.key),
-  }
-});
+function ChatRoom({ roomId }) {
+  // Single type — filter the payload yourself
+  useWaldoEvent('chat_message', (data) => {
+    if (data.room_id === roomId) addMessage(data);
+  });
 
-// Or register dynamically
-registerHandler('chat_message', (data) => addMessage(data));
-unregisterHandler('chat_message');
+  // Many types coalesced into one debounced handler (single internal timer)
+  useWaldoEvent(['notification', 'data_refresh'], refetch, { debounce: 250 });
+
+  return null;
+}
+```
+
+For a non-React / imperative context, `subscribeToEvent(type, cb)` returns an
+unsubscribe function:
+
+```js
+import { subscribeToEvent } from '@byscott-io/where-is-waldo';
+
+const unsubscribe = subscribeToEvent('chat_message', (data) => addMessage(data));
+// later: unsubscribe();
 ```
 
 ### React Hooks
