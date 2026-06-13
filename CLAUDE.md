@@ -73,8 +73,9 @@ configureCable({
 // no central handler config.
 useWaldoEvent('message_type', (data) => handle(data));
 
-// One subscription across many types, debounced:
-useWaldoEvent(['issue_update', 'project_update'], refetch, { debounce: 250 });
+// One subscription across many types. To debounce, compose at the call site
+// (e.g. corebyscott useDebouncedCallback): const refetch = useDebouncedCallback(loadAll, 250);
+useWaldoEvent(['issue_update', 'project_update'], refetch);
 
 // Hook for presence state
 const { connected, tabVisible, subjectActive } = usePresenceContext();

@@ -169,8 +169,10 @@ function ChatRoom({ roomId }) {
     if (data.room_id === roomId) addMessage(data);
   });
 
-  // Many types coalesced into one debounced handler (single internal timer)
-  useWaldoEvent(['notification', 'data_refresh'], refetch, { debounce: 250 });
+  // Many types at once. useWaldoEvent is a pure subscription — to coalesce a
+  // burst into one call, compose a debounce at the call site (e.g. corebyscott's
+  // useDebouncedCallback): const refetch = useDebouncedCallback(loadAll, 250);
+  useWaldoEvent(['notification', 'data_refresh'], refetch);
 
   return null;
 }
