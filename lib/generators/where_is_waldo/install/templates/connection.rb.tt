@@ -2,6 +2,12 @@
 
 module ApplicationCable
   class Connection < ActionCable::Connection::Base
+<%- if auth_method == "jwt" -%>
+    # Turnkey corebyscott JWT auth: decodes the ?token= param, identifies the
+    # connection by current_user / current_container / session_id. Requires
+    # corebyscott. See WhereIsWaldo::JwtConnection to customize.
+    include WhereIsWaldo::JwtConnection
+<%- elsif auth_method == "devise" -%>
     identified_by :current_<%= subject_column.sub(/_id$/, '') %>, :session_id
 
     def connect
@@ -10,41 +16,6 @@ module ApplicationCable
     end
 
     private
-<%- if auth_method == "jwt" -%>
-
-    def find_verified_subject
-      token = request.params[:token]
-      return reject_unauthorized_connection unless token
-
-      # Decode JWT token - adjust this for your JWT library
-      # Example using Corebyscott:
-      # payload = Corebyscott::JwtService.decode(token, touch_last_used: true)
-      #
-      # Example using jwt gem directly:
-      # payload = JWT.decode(token, Rails.application.secret_key_base, true, algorithm: 'HS256').first
-      payload = decode_token(token)
-      return reject_unauthorized_connection unless payload
-
-      subject = <%= subject_class %>.find_by(id: payload[:sub] || payload["sub"])
-      return reject_unauthorized_connection unless subject
-
-      subject
-    end
-
-    def find_session_id
-      token = request.params[:token]
-      return SecureRandom.uuid unless token
-
-      payload = decode_token(token)
-      payload&.dig(:<%= session_column %>) || payload&.dig("<%= session_column %>") || SecureRandom.uuid
-    end
-
-    def decode_token(token)
-      # TODO: Implement your JWT decoding logic here
-      # Return a hash with :sub (subject id) and :<%= session_column %> (session id)
-      raise NotImplementedError, "Implement decode_token in ApplicationCable::Connection"
-    end
-<%- elsif auth_method == "devise" -%>
 
     def find_verified_subject
       # Find user from Devise session cookie
@@ -56,6 +27,14 @@ module ApplicationCable
       request.session.id || SecureRandom.uuid
     end
 <%- else -%>
+    identified_by :current_<%= subject_column.sub(/_id$/, '') %>, :session_id
+
+    def connect
+      self.current_<%= subject_column.sub(/_id$/, '') %> = find_verified_subject
+      self.session_id = find_session_id
+    end
+
+    private
 
     def find_verified_subject
       # TODO: Implement your authentication logic here
@@ -64,8 +43,7 @@ module ApplicationCable
     end
 
     def find_session_id
-      # TODO: Return a unique session identifier
-      # This should be unique per browser tab/connection
+      # TODO: Return a unique session identifier (unique per browser tab)
       SecureRandom.uuid
     end
 <%- end -%>
