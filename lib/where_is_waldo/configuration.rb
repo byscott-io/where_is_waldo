@@ -32,6 +32,13 @@ module WhereIsWaldo
     # :authenticate_proc - proc to authenticate connection, receives request
     attr_accessor :channel_name, :authenticate_proc
 
+    # Default audience resolver for the Broadcastable concern. A lambda that,
+    # given a record, returns the AR scope to broadcast to (e.g. that record's
+    # account members). Set once per app to match its container, e.g.:
+    #   config.broadcast_audience = ->(rec) { rec.account.users }
+    # Models may override per-model via `broadcasts_realtime(scope: ...)`.
+    attr_accessor :broadcast_audience
+
     def initialize
       # Storage defaults
       @adapter = :database
@@ -54,6 +61,9 @@ module WhereIsWaldo
       # ActionCable defaults
       @channel_name = "WhereIsWaldo::PresenceChannel"
       @authenticate_proc = nil
+
+      # Broadcastable default audience (set per app)
+      @broadcast_audience = nil
     end
 
     # Helper to get timeout as duration
