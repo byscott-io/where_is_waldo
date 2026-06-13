@@ -8,6 +8,7 @@ export {
   unregisterHandler,
   getHandlers,
   handleMessage,
+  subscribeToEvent,
 } from './cable';
 
 // Context and Provider
@@ -19,3 +20,4 @@ export {
 
 // Hooks
 export { usePresence } from './hooks/usePresence';
+export { useWaldoEvent } from './hooks/useWaldoEvent';
