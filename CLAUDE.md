@@ -58,15 +58,23 @@ WhereIsWaldo.heartbeat(session_id:, tab_visible:, subject_active:)
 ### Client (React)
 
 ```jsx
-// Configuration with message handlers
+// Configure the connection (presence + event subscriptions)
 configureCable({
   url: '/cable',
   getToken: () => token,
-  handlers: { message_type: (data) => handle(data) }
 });
 
-// Provider wraps app
+// Provider wraps app (opens the cable + presence subscription once)
 <PresenceProvider><App /></PresenceProvider>
+
+// Subscribe to a real-time event type from ANY component. The component
+// receives the payload, decides whether it's relevant, and auto-unsubscribes
+// on unmount. Adding an event = an AR broadcast_to + a useWaldoEvent call;
+// no central handler config.
+useWaldoEvent('message_type', (data) => handle(data));
+
+// One subscription across many types, debounced:
+useWaldoEvent(['issue_update', 'project_update'], refetch, { debounce: 250 });
 
 // Hook for presence state
 const { connected, tabVisible, subjectActive } = usePresenceContext();

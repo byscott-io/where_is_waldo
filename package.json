@@ -1,6 +1,6 @@
 {
   "name": "@byscott-io/where-is-waldo",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "Real-time presence tracking for ActionCable with React hooks",
   "main": "src/index.js",
   "module": "src/index.js",

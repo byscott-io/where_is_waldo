@@ -4,15 +4,13 @@ let consumer = null;
 let config = {
   url: '/cable',
   getToken: null,
-  handlers: {},
 };
 
 // Subscribe-by-event-type registry: message type -> Set of listener fns.
-// This is the modern API (see subscribeToEvent / useWaldoEvent): any number
-// of components can subscribe to a raw event type and decide for themselves
-// whether they care about a given payload. It coexists with the legacy
-// `config.handlers` map (single handler per type) for backward compatibility —
-// handleMessage fans out to BOTH.
+// Components subscribe to a raw event type (see subscribeToEvent /
+// useWaldoEvent) and decide for themselves whether they care about a given
+// payload. handleMessage dispatches every incoming message to the listeners
+// registered for its type.
 const listeners = new Map();
 
 /**
@@ -45,7 +43,6 @@ export function subscribeToEvent(type, callback) {
  * @param {Object} options
  * @param {string} options.url - WebSocket URL (default: '/cable')
  * @param {Function} options.getToken - Function that returns auth token
- * @param {Object} options.handlers - Message type handlers { type: handler }
  */
 export function configureCable(options = {}) {
   config = { ...config, ...options };
@@ -54,23 +51,6 @@ export function configureCable(options = {}) {
     consumer.disconnect();
     consumer = null;
   }
-}
-
-/**
- * Register a message handler for a specific type
- * @param {string} messageType - The message type to handle
- * @param {Function} handler - Handler function receiving (data, message)
- */
-export function registerHandler(messageType, handler) {
-  config.handlers[messageType] = handler;
-}
-
-/**
- * Unregister a message handler
- * @param {string} messageType - The message type to unregister
- */
-export function unregisterHandler(messageType) {
-  delete config.handlers[messageType];
 }
 
 /**
@@ -114,45 +94,27 @@ export function getCableConfig() {
 }
 
 /**
- * Get registered handlers
- * @returns {Object}
- */
-export function getHandlers() {
-  return config.handlers;
-}
-
-/**
- * Handle an incoming message by routing to registered handler
+ * Handle an incoming message by dispatching to every listener subscribed to
+ * its type.
  * @param {Object} message - The message object with type and data
- * @returns {boolean} - Whether a handler was found and called
+ * @returns {boolean} - Whether at least one listener was invoked
  */
 export function handleMessage(message) {
   const { type, data } = message;
-  let handled = false;
 
-  // Legacy single-handler path (configureCable({ handlers })) — kept for
-  // backward compatibility with apps that haven't migrated to subscribeToEvent.
-  const handler = config.handlers[type];
-  if (handler) {
-    handler(data, message);
-    handled = true;
-  }
-
-  // Modern subscribe-by-event-type path: fan out to every registered listener.
-  // Iterate a snapshot so a listener that unsubscribes during dispatch is safe.
   const set = listeners.get(type);
-  if (set && set.size) {
-    Array.from(set).forEach((cb) => {
-      try {
-        cb(data, message);
-      } catch (err) {
-        // One bad listener must not block the others.
-        // eslint-disable-next-line no-console
-        console.error(`[where-is-waldo] listener for "${type}" threw:`, err);
-      }
-    });
-    handled = true;
-  }
+  if (!set || set.size === 0) return false;
 
-  return handled;
+  // Iterate a snapshot so a listener that unsubscribes during dispatch is safe.
+  Array.from(set).forEach((cb) => {
+    try {
+      cb(data, message);
+    } catch (err) {
+      // One bad listener must not block the others.
+      // eslint-disable-next-line no-console
+      console.error(`[where-is-waldo] listener for "${type}" threw:`, err);
+    }
+  });
+
+  return true;
 }

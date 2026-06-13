@@ -4,9 +4,6 @@ export {
   getConsumer,
   disconnectCable,
   getCableConfig,
-  registerHandler,
-  unregisterHandler,
-  getHandlers,
   handleMessage,
   subscribeToEvent,
 } from './cable';
