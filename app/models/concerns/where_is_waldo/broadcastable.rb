@@ -72,7 +72,10 @@ module WhereIsWaldo
     end
 
     def wiw_event_name(verb)
-      "#{self.class.model_name.element}_#{verb}"
+      # Use the STI base class so subclasses (e.g. Widget::Grid) broadcast the
+      # base event name ("widget_update"), not the subclass ("grid_update").
+      klass = self.class.respond_to?(:base_class) ? self.class.base_class : self.class
+      "#{klass.model_name.element}_#{verb}"
     end
 
     def wiw_payload(verb)
