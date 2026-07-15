@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require "json"
+# Standard gem tasks: `rake build` (package the .gem), `rake install`,
+# `rake release` (tag + push to the allowed_push_host = rubygems.org).
+require "bundler/gem_tasks"
 
 namespace :version do
   desc "Show current version"

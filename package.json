@@ -65,7 +65,7 @@
   },
   "homepage": "https://github.com/byscott-io/where_is_waldo#readme",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
+    "registry": "https://registry.npmjs.org",
     "access": "public"
   },
   "dependencies": {

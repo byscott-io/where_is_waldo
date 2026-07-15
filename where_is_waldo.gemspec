@@ -18,6 +18,9 @@ Gem::Specification.new do |spec|
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/master/CHANGELOG.md"
+  # Publish to public RubyGems.org — lock the host so a stray `gem push` can't
+  # go to the wrong registry.
+  spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.files = Dir[
     "lib/**/*",
