@@ -2,8 +2,8 @@
   "name": "@byscott-io/where-is-waldo",
   "version": "0.0.31",
   "description": "Real-time presence tracking for ActionCable with React hooks",
-  "main": "src/index.js",
-  "module": "src/index.js",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
   "files": [
     "dist",
     "src"
@@ -33,6 +33,7 @@
     "@rollup/plugin-babel": "^7.1.0",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rails/actioncable": "^8.1.300",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "cypress": "^15.18.1",
@@ -67,9 +68,6 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"
-  },
-  "dependencies": {
-    "@rails/actioncable": "^8.1.300"
   },
   "resolutions": {
     "qs": "^6.15.2"
