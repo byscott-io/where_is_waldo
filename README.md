@@ -5,6 +5,7 @@ Real-time presence tracking for Rails + React using ActionCable.
 ## Features
 
 - **Presence tracking** - know who's online
+- **Live presence roster** - per-device "who's around" (active/idle/background across web + mobile), pluggable per-account delivery (`:pull` / `:nudge` / `:fanout` / `:broadcast`)
 - **Scope-based queries** - `online(org.users.admin)`
 - **Targeted broadcasting** - send to any AR scope
 - **Event subscriptions** - components subscribe by event type (`useWaldoEvent`)
