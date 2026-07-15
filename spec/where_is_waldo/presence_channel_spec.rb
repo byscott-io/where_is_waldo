@@ -66,7 +66,7 @@ RSpec.describe WhereIsWaldo::PresenceChannel, type: :channel do
     let(:deltas) { [] }
 
     before do
-      WhereIsWaldo.config.presence_org = ->(_subject) { org }
+      WhereIsWaldo.config.roster_org = ->(_subject) { org }
       WhereIsWaldo.config.roster_mode = :broadcast # transitions only push in broadcast mode
       captured = deltas
       allow(ActionCable.server).to receive(:broadcast) do |target, message|

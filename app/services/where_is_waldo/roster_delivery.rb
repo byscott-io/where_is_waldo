@@ -17,7 +17,7 @@ module WhereIsWaldo
     def for(mode)
       case mode.to_sym
       when :broadcast then Broadcast.new
-      when :pull then Pull.new
+      when :poll then Poll.new
       when :nudge then Nudge.new
       when :fanout then Fanout.new
       else
@@ -51,7 +51,7 @@ module WhereIsWaldo
     # filtering — everyone in the account sees everyone. O(1) per transition.
     class Broadcast < Base
       def subscribe_plan(subject, _session_id)
-        org = config.resolve_org(subject)
+        org = config.resolve_roster_org(subject)
         stream = Roster.stream_name(org)
         return { streams: [], messages: [] } unless stream
 
@@ -70,11 +70,11 @@ module WhereIsWaldo
     # server-filtered snapshot (first poll / resync) or diff (subsequent). The
     # diff baseline lives in Rails.cache keyed per session (tab), TTL'd so a
     # stale/expired cursor self-heals into a full snapshot. Handles ANY
-    # visibility rule via config.presence_visible_scope. No broadcasts.
-    class Pull < Base
+    # visibility rule via config.roster_visible_to. No broadcasts.
+    class Poll < Base
       # Overridden by :nudge so the snapshot advertises the right mode.
       def mode
-        :pull
+        :poll
       end
 
       def subscribe_plan(subject, session_id)
@@ -99,14 +99,14 @@ module WhereIsWaldo
 
       private
 
-      # Streams to subscribe on connect. :pull needs none (data rides the poll
+      # Streams to subscribe on connect. :poll needs none (data rides the poll
       # transmit); :nudge overrides this to also receive the account nudge.
       def subscribe_streams(_subject)
         []
       end
 
       def current_members(subject)
-        Roster.members_for(config.resolve_visible_scope(subject))
+        Roster.members_for(config.resolve_visible_to(subject))
       end
 
       def diff_messages(baseline, current)
@@ -140,11 +140,11 @@ module WhereIsWaldo
       end
     end
 
-    # Pull, plus a content-free nudge broadcast on transition so clients re-poll
+    # Poll, plus a content-free nudge broadcast on transition so clients re-poll
     # immediately instead of waiting for the next interval — near-instant
     # latency with the same server-filtered (arbitrary-visibility) delivery. The
     # nudge carries no identity/state, so it only reveals "activity happened".
-    class Nudge < Pull
+    class Nudge < Poll
       def mode
         :nudge
       end
@@ -157,7 +157,7 @@ module WhereIsWaldo
 
       # Also subscribe the account stream so this client receives nudges.
       def subscribe_streams(subject)
-        stream = Roster.stream_name(config.resolve_org(subject))
+        stream = Roster.stream_name(config.resolve_roster_org(subject))
         stream ? [stream] : []
       end
     end
@@ -165,11 +165,11 @@ module WhereIsWaldo
     # Instant per-viewer push for arbitrary/asymmetric visibility. Each viewer
     # streams only their own stream and gets a server-filtered snapshot on
     # connect; on a transition the subject's delta is pushed to every viewer in
-    # its directional audience (config.presence_audience). O(audience) per
+    # its directional audience (config.roster_viewers_of). O(audience) per
     # transition — the price of instant delivery under restricted visibility.
     class Fanout < Base
       def subscribe_plan(subject, _session_id)
-        members = Roster.members_for(config.resolve_visible_scope(subject))
+        members = Roster.members_for(config.resolve_visible_to(subject))
         {
           streams: [Roster.viewer_stream(subject.id)],
           messages: [Roster.snapshot_message(members.values, mode: :fanout)]

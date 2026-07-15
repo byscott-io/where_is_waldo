@@ -8,7 +8,7 @@ RSpec.describe WhereIsWaldo::RosterChannel, type: :channel do
 
   before do
     WhereIsWaldo::PresenceService.send(:reset_adapter!)
-    WhereIsWaldo.config.presence_org = ->(_subject) { org }
+    WhereIsWaldo.config.roster_org = ->(_subject) { org }
     WhereIsWaldo.config.subject_data_proc = ->(u) { { id: u.id, name: u.name } }
 
     stub_connection(waldo_subject_id: user.id, waldo_session_id: "sess-1")
@@ -38,7 +38,7 @@ RSpec.describe WhereIsWaldo::RosterChannel, type: :channel do
     end
   end
 
-  context "when mode is :pull (default)" do
+  context "when mode is :poll (default)" do
     before { allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new) }
 
     it "does not stream (data rides the poll transmit)" do
@@ -55,7 +55,7 @@ RSpec.describe WhereIsWaldo::RosterChannel, type: :channel do
 
       snapshot = transmissions.last
       expect(snapshot["type"]).to eq("roster_snapshot")
-      expect(snapshot["mode"]).to eq("pull")
+      expect(snapshot["mode"]).to eq("poll")
       expect(snapshot["poll_interval"]).to eq(15)
     end
 
@@ -78,7 +78,7 @@ RSpec.describe WhereIsWaldo::RosterChannel, type: :channel do
   end
 
   it "rejects the subscription when the roster is not configured" do
-    WhereIsWaldo.config.presence_org = nil
+    WhereIsWaldo.config.roster_org = nil
 
     subscribe
 

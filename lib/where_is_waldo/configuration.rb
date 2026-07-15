@@ -41,43 +41,43 @@ module WhereIsWaldo
 
     # === Live presence roster ("who's around in my org/account") ===
     #
-    # presence_org: given a subject, return the org/container record that
+    # roster_org: given a subject, return the org/container record that
     #   defines the roster boundary. Its class + id key the single shared roster
     #   ActionCable stream, so every member of the same org subscribes to ONE
     #   stream and a presence change is a single O(1) broadcast (not per-member
     #   fan-out). Required to enable the roster feature — nil leaves it inert.
-    #     config.presence_org = ->(subject) { subject.account }
+    #     config.roster_org = ->(subject) { subject.account }
     #
-    # presence_roster: given that org, return the AR scope of member subjects
+    # roster_members: given that org, return the AR scope of member subjects
     #   shown in the roster. Optional — defaults to org.public_send(<subjects>)
     #   inferred from subject_class (User => :users). Provide it to scope the
     #   list, e.g. only active members:
-    #     config.presence_roster = ->(org) { org.users.active }
+    #     config.roster_members = ->(org) { org.users.active }
     #
     # roster_members_association: association used to build the default roster
-    #   from the org when presence_roster is unset (defaults to the pluralized
+    #   from the org when roster_members is unset (defaults to the pluralized
     #   subject_class, e.g. :users).
-    attr_accessor :presence_org, :presence_roster, :roster_members_association
+    attr_accessor :roster_org, :roster_members, :roster_members_association
 
-    # presence_visible_scope: given a VIEWER, return the AR scope of subjects
-    #   that viewer may see (for :pull/:nudge snapshots + diffs). Handles any
+    # roster_visible_to: given a VIEWER, return the AR scope of subjects
+    #   that viewer may see (for :poll/:nudge snapshots + diffs). Handles any
     #   visibility rule server-side. Defaults to the viewer's whole org roster
     #   (everyone-sees-everyone) when unset.
-    #     config.presence_visible_scope = ->(viewer) { viewer.visible_users }
+    #     config.roster_visible_to = ->(viewer) { viewer.visible_users }
     #
-    # presence_audience: given a SUBJECT, return the AR scope of viewers allowed
+    # roster_viewers_of: given a SUBJECT, return the AR scope of viewers allowed
     #   to see it (ONLY used by :fanout, Phase 3). Must be the exact inverse of
-    #   presence_visible_scope.
-    attr_accessor :presence_visible_scope, :presence_audience
+    #   roster_visible_to.
+    attr_accessor :roster_visible_to, :roster_viewers_of
 
     # roster_mode: delivery strategy, per account. A symbol, or a callable
     #   resolving an account -> mode. MUST be a function of the account (uniform
-    #   for all its members). Default :pull (safe: server-side filtered).
-    #     :pull       - heartbeat/poll, server-filtered, ~interval latency
+    #   for all its members). Default :poll (safe: server-side filtered).
+    #     :poll       - heartbeat/poll, server-filtered, ~interval latency
     #     :broadcast  - instant shared-stream push, NO filtering (open account)
-    #     :nudge      - :pull + content-free trigger (Phase 2)
+    #     :nudge      - :poll + content-free trigger (Phase 2)
     #     :fanout     - per-viewer push (Phase 3)
-    #     config.roster_mode = ->(account) { account.everyone_admin? ? :broadcast : :pull }
+    #     config.roster_mode = ->(account) { account.everyone_admin? ? :broadcast : :poll }
     attr_accessor :roster_mode
 
     # Tuning (pull/nudge). roster_nudge_jitter (seconds) spreads clients' re-poll
@@ -111,12 +111,12 @@ module WhereIsWaldo
       @broadcast_audience = nil
 
       # Presence roster (set per app to enable)
-      @presence_org = nil
-      @presence_roster = nil
+      @roster_org = nil
+      @roster_members = nil
       @roster_members_association = nil
-      @presence_visible_scope = nil
-      @presence_audience = nil
-      @roster_mode = :pull
+      @roster_visible_to = nil
+      @roster_viewers_of = nil
+      @roster_mode = :poll
       @roster_poll_interval = 15
       @roster_cache_ttl = 90
       @roster_nudge_jitter = 0.5
@@ -135,14 +135,14 @@ module WhereIsWaldo
     end
 
     # Resolve the org/container record for a subject (nil if unset/absent).
-    def resolve_org(subject)
-      return nil unless presence_org && subject
+    def resolve_roster_org(subject)
+      return nil unless roster_org && subject
 
-      presence_org.call(subject)
+      roster_org.call(subject)
     end
 
     # Association name used to derive the default roster from an org when
-    # presence_roster is not configured (e.g. subject_class "User" => :users).
+    # roster_members is not configured (e.g. subject_class "User" => :users).
     def members_association
       return roster_members_association if roster_members_association
       return nil if subject_class.blank?
@@ -151,11 +151,11 @@ module WhereIsWaldo
     end
 
     # Resolve the AR scope of member subjects for an org (nil if not resolvable).
-    def resolve_roster(org)
+    def resolve_members(org)
       return nil unless org
 
-      if presence_roster
-        presence_roster.call(org)
+      if roster_members
+        roster_members.call(org)
       elsif (assoc = members_association) && org.respond_to?(assoc)
         org.public_send(assoc)
       end
@@ -163,34 +163,34 @@ module WhereIsWaldo
 
     # True when the live-presence roster feature is configured.
     def roster_enabled?
-      !presence_org.nil?
+      !roster_org.nil?
     end
 
     # Resolve the AR scope of subjects a VIEWER may see. Defaults to the
     # viewer's whole org roster (everyone-sees-everyone) when unset.
-    def resolve_visible_scope(viewer)
+    def resolve_visible_to(viewer)
       return nil unless viewer
 
-      if presence_visible_scope
-        presence_visible_scope.call(viewer)
+      if roster_visible_to
+        roster_visible_to.call(viewer)
       else
-        resolve_roster(resolve_org(viewer))
+        resolve_members(resolve_roster_org(viewer))
       end
     end
 
     # Resolve the AR scope of viewers allowed to see a SUBJECT (:fanout only).
-    def resolve_audience(subject)
-      return nil unless presence_audience && subject
+    def resolve_viewers_of(subject)
+      return nil unless roster_viewers_of && subject
 
-      presence_audience.call(subject)
+      roster_viewers_of.call(subject)
     end
 
     # Resolve the delivery mode for an account. Callable roster_mode is invoked
-    # with the account; a bare symbol is returned as-is. Defaults to :pull.
+    # with the account; a bare symbol is returned as-is. Defaults to :poll.
     def resolve_mode(account)
       mode = roster_mode
       mode = mode.call(account) if mode.respond_to?(:call)
-      (mode || :pull).to_sym
+      (mode || :poll).to_sym
     end
 
     # Build subject data hash from a subject record

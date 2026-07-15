@@ -21,7 +21,7 @@ module WhereIsWaldo
   #                 mobile app backgrounded)
   #   offline     - no live sessions (overall status only; absent from devices)
   #
-  # Enable by configuring `presence_org` (and optionally `presence_roster`).
+  # Enable by configuring `roster_org` (and optionally `roster_members`).
   class Roster
     # Activity ranking used to pick a subject's aggregate status from the "most
     # present" of their sessions.
@@ -40,21 +40,21 @@ module WhereIsWaldo
       # Shared stream name for the org a subject belongs to (nil when the roster
       # is unconfigured or the subject has no org).
       def stream_for_subject(subject)
-        stream_name(WhereIsWaldo.config.resolve_org(subject))
+        stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
       end
 
       # Full roster state for an org: every member subject with their current
       # aggregate presence. Sent once, on subscribe.
       # @return [Array<Hash>] member state hashes
       def snapshot(org, timeout: nil)
-        members = WhereIsWaldo.config.resolve_roster(org)
+        members = WhereIsWaldo.config.resolve_members(org)
         return [] unless members
 
         members_for(members, timeout: timeout).values
       end
 
       # Member states for an arbitrary AR scope of subjects, keyed by id. Used
-      # by :pull to snapshot / diff a viewer's visible scope.
+      # by :poll to snapshot / diff a viewer's visible scope.
       # @return [Hash{Object => Hash}] id => member hash
       def members_for(scope, timeout: nil)
         return {} unless scope
@@ -69,7 +69,7 @@ module WhereIsWaldo
 
       def snapshot_message(members, mode:)
         message = { type: "roster_snapshot", mode: mode.to_s, members: members }
-        message[:poll_interval] = WhereIsWaldo.config.roster_poll_interval if %i[pull nudge].include?(mode.to_sym)
+        message[:poll_interval] = WhereIsWaldo.config.roster_poll_interval if %i[poll nudge].include?(mode.to_sym)
         message[:nudge_jitter] = WhereIsWaldo.config.roster_nudge_jitter if mode.to_sym == :nudge
         message
       end
@@ -113,7 +113,7 @@ module WhereIsWaldo
         return false if subject_id.blank?
 
         subject = find_subject(subject_id)
-        stream = stream_name(WhereIsWaldo.config.resolve_org(subject))
+        stream = stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
         return false unless stream
 
         member = build_member_by_id(subject, subject_id, timeout: timeout)
@@ -130,13 +130,13 @@ module WhereIsWaldo
       end
 
       # Push a subject's delta to every viewer allowed to see them (:fanout
-      # mode). Directional audience (config.presence_audience) makes this correct
+      # mode). Directional audience (config.roster_viewers_of) makes this correct
       # for arbitrary/asymmetric visibility, at O(audience) broadcasts.
       def publish_fanout(subject_id, timeout: nil)
         return false if subject_id.blank?
 
         subject = find_subject(subject_id)
-        audience = subject && WhereIsWaldo.config.resolve_audience(subject)
+        audience = subject && WhereIsWaldo.config.resolve_viewers_of(subject)
         return false unless audience
 
         message = delta_message(build_member_by_id(subject, subject_id, timeout: timeout))
@@ -153,7 +153,7 @@ module WhereIsWaldo
         return false if subject_id.blank?
 
         subject = find_subject(subject_id)
-        stream = stream_name(WhereIsWaldo.config.resolve_org(subject))
+        stream = stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
         return false unless stream
 
         ActionCable.server.broadcast(stream, nudge_message)

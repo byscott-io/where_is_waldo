@@ -4,7 +4,7 @@ import {
   applyRosterMessage,
   sortedMembers,
   onlineMembers,
-  isPullMode,
+  isPollMode,
   ROSTER_SNAPSHOT,
   ROSTER_NUDGE,
 } from '../core/rosterStore';
@@ -35,7 +35,7 @@ const DEFAULT_NUDGE_JITTER = 0.5; // seconds; overridden by the server's snapsho
  *   mode, where the full account roster reaches the client and you want to hide
  *   some rows in the UI. It is NOT an access-control boundary (the unfiltered
  *   data is already on the client). For enforced visibility use a server-side
- *   mode (`:pull`/`:nudge`/`:fanout`).
+ *   mode (`:poll`/`:nudge`/`:fanout`).
  * @returns {{ members: Array, online: Array, onlineCount: number,
  *             byId: Object, connected: boolean, mode: string|null }}
  */
@@ -96,7 +96,7 @@ export function usePresenceRoster(options = {}) {
           if (message && message.type === ROSTER_SNAPSHOT) {
             setMode(message.mode || null);
             if (message.nudge_jitter != null) nudgeJitterRef.current = message.nudge_jitter;
-            if (isPullMode(message.mode)) startPolling(subscription, message.poll_interval);
+            if (isPollMode(message.mode)) startPolling(subscription, message.poll_interval);
           }
           if (message && message.type === ROSTER_NUDGE) {
             scheduleNudgePoll(subscription);

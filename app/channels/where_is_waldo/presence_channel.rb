@@ -66,13 +66,13 @@ module WhereIsWaldo
       return nil unless WhereIsWaldo.config.roster_enabled?
 
       subject = WhereIsWaldo.config.subject_class_constant&.find_by(id: waldo_subject_id)
-      org = subject && WhereIsWaldo.config.resolve_org(subject)
+      org = subject && WhereIsWaldo.config.resolve_roster_org(subject)
       return nil unless org
 
       WhereIsWaldo::RosterDelivery.for(WhereIsWaldo.config.resolve_mode(org))
     end
 
-    # Let the delivery strategy react to a presence transition. For :pull this
+    # Let the delivery strategy react to a presence transition. For :poll this
     # is a no-op (clients poll); for :broadcast it pushes a delta to the account
     # stream. Gated to actual transitions by the heartbeat handler.
     def publish_roster_change

@@ -8,7 +8,7 @@ RSpec.describe WhereIsWaldo::Roster do
 
   before do
     WhereIsWaldo::PresenceService.send(:reset_adapter!)
-    WhereIsWaldo.config.presence_org = ->(_subject) { org }
+    WhereIsWaldo.config.roster_org = ->(_subject) { org }
     WhereIsWaldo.config.subject_data_proc = ->(u) { { id: u.id, name: u.name } }
   end
 
@@ -108,7 +108,7 @@ RSpec.describe WhereIsWaldo::Roster do
     end
 
     it "no-ops when the roster is not configured" do
-      WhereIsWaldo.config.presence_org = nil
+      WhereIsWaldo.config.roster_org = nil
       user = create(:user)
 
       expect(described_class.publish(user.id)).to be(false)
@@ -121,12 +121,12 @@ RSpec.describe WhereIsWaldo::Roster do
       expect(WhereIsWaldo.config.members_association).to eq(:users)
     end
 
-    it "uses presence_roster when provided, else the org's default association" do
-      WhereIsWaldo.config.presence_roster = ->(o) { o.users.where(id: 0) }
-      expect(WhereIsWaldo.config.resolve_roster(org).to_sql).to include("\"id\" = 0")
+    it "uses roster_members when provided, else the org's default association" do
+      WhereIsWaldo.config.roster_members = ->(o) { o.users.where(id: 0) }
+      expect(WhereIsWaldo.config.resolve_members(org).to_sql).to include("\"id\" = 0")
 
-      WhereIsWaldo.config.presence_roster = nil
-      expect(WhereIsWaldo.config.resolve_roster(org)).to eq(org.users)
+      WhereIsWaldo.config.roster_members = nil
+      expect(WhereIsWaldo.config.resolve_members(org)).to eq(org.users)
     end
   end
 end

@@ -69,8 +69,8 @@ export function applyRosterMessage(map, message) {
  * Modes that require the client to poll the server for deltas (vs. passively
  * receiving pushed broadcasts). The server declares the mode in the snapshot.
  */
-export function isPullMode(mode) {
-  return mode === 'pull' || mode === 'nudge';
+export function isPollMode(mode) {
+  return mode === 'poll' || mode === 'nudge';
 }
 
 /**

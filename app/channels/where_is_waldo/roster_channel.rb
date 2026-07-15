@@ -9,7 +9,7 @@ module WhereIsWaldo
   #
   # Modes:
   #   :broadcast - stream_from the shared account stream; deltas are pushed.
-  #   :pull      - no stream; the client calls #poll and gets a filtered diff.
+  #   :poll      - no stream; the client calls #poll and gets a filtered diff.
   class RosterChannel < ApplicationCable::Channel
     def subscribed
       subject = current_subject
@@ -32,7 +32,7 @@ module WhereIsWaldo
     private
 
     def resolve_mode(subject)
-      org = WhereIsWaldo.config.resolve_org(subject)
+      org = WhereIsWaldo.config.resolve_roster_org(subject)
       return nil unless org
 
       WhereIsWaldo.config.resolve_mode(org)

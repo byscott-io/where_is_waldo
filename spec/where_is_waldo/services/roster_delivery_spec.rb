@@ -9,8 +9,8 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
 
   before do
     WhereIsWaldo::PresenceService.send(:reset_adapter!)
-    WhereIsWaldo.config.presence_org = ->(_subject) { org }
-    WhereIsWaldo.config.presence_visible_scope = ->(_viewer) { User.where(id: [user.id, other.id]) }
+    WhereIsWaldo.config.roster_org = ->(_subject) { org }
+    WhereIsWaldo.config.roster_visible_to = ->(_viewer) { User.where(id: [user.id, other.id]) }
     WhereIsWaldo.config.subject_data_proc = ->(u) { { id: u.id, name: u.name } }
     allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new)
   end
@@ -21,18 +21,18 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
     end
   end
 
-  describe WhereIsWaldo::RosterDelivery::Pull do
+  describe WhereIsWaldo::RosterDelivery::Poll do
     subject(:strategy) { described_class.new }
 
     let(:session) { "sess-1" }
 
-    it "subscribe_plan returns a pull snapshot (no stream) and seeds the baseline" do
+    it "subscribe_plan returns a poll snapshot (no stream) and seeds the baseline" do
       create(:presence, subject: user, tab_visible: true, subject_active: true)
 
       plan = strategy.subscribe_plan(user, session)
 
       expect(plan[:streams]).to be_empty
-      expect(plan[:messages].first).to include(type: "roster_snapshot", mode: "pull")
+      expect(plan[:messages].first).to include(type: "roster_snapshot", mode: "poll")
     end
 
     it "poll returns nothing when no visible member changed" do
@@ -65,7 +65,7 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
       create(:presence, subject: user, tab_visible: true, subject_active: true)
       strategy.subscribe_plan(user, session) # baseline includes user + other
 
-      WhereIsWaldo.config.presence_visible_scope = ->(_v) { User.where(id: user.id) }
+      WhereIsWaldo.config.roster_visible_to = ->(_v) { User.where(id: user.id) }
       messages = strategy.poll_messages(user, session)
 
       removed = messages.find { |m| m[:member][:_removed] }
@@ -85,7 +85,7 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
       expect(plan[:messages].first).to include(mode: "nudge", nudge_jitter: 0.5)
     end
 
-    it "poll returns a server-filtered diff just like pull" do
+    it "poll returns a server-filtered diff just like poll" do
       presence = create(:presence, subject: user, tab_visible: true, subject_active: true)
       strategy.subscribe_plan(user, "sess-1")
 
@@ -113,7 +113,7 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
       # Asymmetric visibility: `user` (a "manager") is visible only to itself;
       # `other` (a "report") is visible to both. So audience(user) = [user],
       # audience(other) = [user, other].
-      WhereIsWaldo.config.presence_audience = lambda do |subject|
+      WhereIsWaldo.config.roster_viewers_of = lambda do |subject|
         subject.id == user.id ? User.where(id: user.id) : User.where(id: [user.id, other.id])
       end
     end
