@@ -65,6 +65,35 @@ module WhereIsWaldo
       PresenceService.cleanup(timeout: timeout)
     end
 
+    # === Presence roster (live presence awareness) ===
+
+    # Full roster state for an org record (every member + current presence).
+    def roster_snapshot(org, timeout: nil)
+      Roster.snapshot(org, timeout: timeout)
+    end
+
+    # Aggregate presence state ({ status:, devices: }) for one subject.
+    def roster_state_for(subject_id, timeout: nil)
+      Roster.state_for(subject_id, timeout: timeout)
+    end
+
+    # Presence status for a subject on a specific device/platform.
+    # @example WhereIsWaldo.presence_on(user.id, :mobile) # => "idle"
+    def presence_on(subject_id, platform, timeout: nil)
+      Roster.device_status(subject_id, platform, timeout: timeout)
+    end
+
+    # Broadcast a compact presence delta for a subject to their org's roster
+    # stream. Call on transitions only (usually automatic via PresenceChannel).
+    def publish_presence(subject_id, timeout: nil)
+      Roster.publish(subject_id, timeout: timeout)
+    end
+
+    # Shared roster stream name for the org a subject belongs to.
+    def roster_stream_for(subject)
+      Roster.stream_for_subject(subject)
+    end
+
     # === Broadcasting ===
 
     # Broadcast to subjects in a scope

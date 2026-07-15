@@ -106,10 +106,17 @@ WhereIsWaldo.configure do |config|
   config.timeout = 90                   # seconds until offline
   config.heartbeat_interval = 30
 
-  # Optional: custom subject data in presence hash
+  # Optional: custom subject data in presence hash. NOTE: with the roster
+  # enabled, these fields are broadcast to every member of the org — see
+  # Security.
   config.subject_data_proc = ->(user) {
     { id: user.id, name: user.name, avatar: user.avatar_url }
   }
+
+  # Live presence roster (see "Live Presence Roster"). Set presence_org to
+  # enable; presence_roster is optional (defaults to org.<subjects>).
+  config.presence_org = ->(user) { user.account }
+  config.presence_roster = ->(org) { org.users.active }
 
   # Redis adapter
   # config.redis_client = Redis.new(url: ENV["REDIS_URL"])
@@ -151,6 +158,114 @@ WhereIsWaldo.broadcast_to(user, :force_logout, {})
 # To a specific session
 WhereIsWaldo.broadcast_to_session(session_id, :warning, { message: "..." })
 ```
+
+### Live Presence Roster ("who's around in my org")
+
+A ready-made way to show live presence awareness across an org/account — who's
+here right now, on what device, and how active. It is built as **data, not UI**:
+the server keeps the client's roster in sync and you render whatever component
+you like.
+
+**Delivery is a per-account strategy** so you can trade latency × cost ×
+visibility-enforcement to fit your app. The server picks the mode and the client
+adapts automatically (no client mode config). Modes (default `:pull`):
+
+| Mode | Latency | Visibility | Cost/transition |
+|------|---------|------------|-----------------|
+| `:pull` (default) | ~poll interval | server-side query — **any** rule | flat (1 cached query/poll) |
+| `:broadcast` | instant | **none** (everyone in account sees everyone) | O(1) |
+
+`:pull` sends a full **snapshot** on connect, then the client polls and the
+server replies with a server-*filtered* diff (baseline cached per session,
+TTL'd for auto-resync) — so arbitrary/asymmetric visibility "just works" via
+`presence_visible_scope`. `:broadcast` instead streams one shared account stream
+and pushes deltas instantly, with **no** visibility filtering (open-visibility
+accounts only). Additional modes (`:nudge`, `:fanout`, client-filter) are on the
+roadmap — see `docs/PRESENCE_ROSTER_PLAN.md`.
+
+**Per-device, multi-session.** A subject's state is aggregated across *all*
+their live sessions (multiple browser tabs, mobile, etc.):
+
+```
+{ id: 7, status: "active", devices: { web: "idle", mobile: "active" } }
+```
+
+- `status` — highest activity across devices (the "active anywhere?" answer):
+  - `active` — a live session is visible/foreground **and** working
+  - `idle` — a live session is visible/foreground but not actively using
+  - `background` — only backgrounded/hidden sessions are live
+  - `offline` — no live sessions
+- `devices[platform]` — that platform's own status (answers "active on
+  **mobile**?" vs. "active at all?").
+
+#### Configure
+
+```ruby
+WhereIsWaldo.configure do |config|
+  # The org/account a subject belongs to. Required to enable the roster.
+  config.presence_org = ->(subject) { subject.account }
+
+  # What a VIEWER may see (:pull/:nudge). Any visibility rule, server-enforced.
+  # Defaults to the viewer's whole org (everyone-sees-everyone) when unset.
+  config.presence_visible_scope = ->(viewer) { viewer.visible_users }
+
+  # Delivery mode, per account. Symbol or a callable resolving account -> mode.
+  # MUST be a function of the account (uniform for all its members). Default :pull.
+  config.roster_mode = ->(account) { account.everyone_admin? ? :broadcast : :pull }
+
+  # :broadcast only — the member list for the shared snapshot. Defaults to
+  # org.public_send(<subjects>) inferred from subject_class (e.g. :users).
+  config.presence_roster = ->(org) { org.users.active }
+
+  # Tuning (:pull/:nudge)
+  config.roster_poll_interval = 15  # seconds
+  config.roster_cache_ttl     = 90  # seconds; > poll gap → auto-resync
+end
+```
+
+The `RosterChannel` is provided by the gem; no app code is needed beyond config.
+
+#### Consume it (React — data hook, bring your own UI)
+
+```jsx
+import { usePresenceRoster, presenceColor, memberLabel } from '@byscott-io/where-is-waldo';
+
+function TeamPresence() {
+  const { online, members, onlineCount, byId } = usePresenceRoster();
+
+  // `members` is always the full, live set (snapshot seeded, deltas patched).
+  return (
+    <ul>
+      {online.map((m) => (
+        <li key={m.id}>
+          <span style={{ color: presenceColor(m.status) }}>●</span>
+          {memberLabel(m)} — {m.status}
+          {m.devices.mobile && ' 📱'}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+The hook and its reducer (`../core/rosterStore`) are pure — **no DOM** — so a
+React Native app reuses the exact same data logic and only swaps the view.
+
+#### Query presence server-side
+
+```ruby
+WhereIsWaldo.roster_snapshot(org)            # full roster + per-device state
+WhereIsWaldo.roster_state_for(user.id)       # => { status:, devices: }
+WhereIsWaldo.presence_on(user.id, :mobile)   # => "idle" (per-device)
+```
+
+#### Reporting presence from mobile
+
+Mobile is "logged in" purely by connecting with `metadata: { platform: "mobile" }`
+and sending the same heartbeat shape as the web client — map the app's
+foreground/background to `tab_visible` and its activity to `subject_active`.
+No server-side changes: `platform` is read from the presence metadata (defaults
+to `"web"`).
 
 ### Client Event Subscriptions
 
@@ -218,6 +333,45 @@ Sidekiq::Cron::Job.create(
 rake version:show         # Show current version
 rake version:bump[0.1.0]  # Bump gem and npm together
 ```
+
+## Security
+
+ActionCable presence is only as safe as the connection auth around it. What the
+gem guarantees, and what your app must do:
+
+**Guaranteed by the gem**
+
+- **No client-chosen rooms.** `RosterChannel` derives the org from the
+  *authenticated connection* (`current_subject` → `presence_org`), never from a
+  client-supplied param — a user cannot subscribe to another org's roster.
+- **Self-scoped subject streams.** `PresenceChannel` streams only the
+  connection's own subject id, so targeted messages can't be eavesdropped.
+- **Unauthenticated connections are rejected** (`JwtConnection`).
+
+**Your app's responsibility**
+
+- **Identify the connection from a *verified* credential** (a signed JWT, as
+  `JwtConnection` does). Never trust a client-supplied `subject_id`. ⚠️ The
+  dummy app authenticates from a query param for tests only — do not copy that
+  into production.
+- **`subject_data_proc` fans out org-wide.** Every field it returns is
+  broadcast to all roster members. Include only what all members may see; keep
+  PII out unless intended.
+- **Visibility enforcement depends on the delivery mode.** `:pull` (and the
+  roadmap `:nudge`) filter server-side by `presence_visible_scope` (a
+  `WHERE ... IN` clause) — any rule, enforced, nothing an unauthorized member
+  could read off the wire. `:broadcast` does **no** filtering: it shares one
+  account stream and pushes every member's presence to everyone (`presence_
+  roster` only scopes the initial *snapshot list*, not the live stream). So
+  select `:broadcast` only for accounts with genuinely open visibility; for any
+  restricted visibility use `:pull` (the default). See
+  `docs/PRESENCE_ROSTER_PLAN.md` for the full mode matrix and tradeoffs.
+- **Token in the URL.** The JWT is passed as `?token=…`; use WSS only, keep
+  tokens short-lived, and avoid logging query strings. Set
+  `config.action_cable.allowed_request_origins` as defense-in-depth.
+- **Heartbeat/DoS.** Heartbeats are client-paced DB writes; roster broadcasts
+  are gated to transitions. For large or hostile deployments use the Redis
+  adapter and consider rate-limiting.
 
 ## License
 

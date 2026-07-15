@@ -59,4 +59,38 @@ RSpec.describe WhereIsWaldo::PresenceChannel, type: :channel do
       end
     end
   end
+
+  describe "roster deltas (efficiency gate)" do
+    let(:org) { RosterTestOrg.new(id: 3, members: User.where(id: user.id)) }
+    let(:stream) { "where_is_waldo:roster:RosterTestOrg:3" }
+    let(:deltas) { [] }
+
+    before do
+      WhereIsWaldo.config.presence_org = ->(_subject) { org }
+      WhereIsWaldo.config.roster_mode = :broadcast # transitions only push in broadcast mode
+      captured = deltas
+      allow(ActionCable.server).to receive(:broadcast) do |target, message|
+        captured << message if target == stream
+      end
+    end
+
+    it "publishes a delta on connect" do
+      subscribe
+
+      expect(deltas.pluck(:type)).to include("roster_delta")
+    end
+
+    it "publishes on an activity transition but not on unchanged heartbeats" do
+      subscribe # connect delta (active + visible)
+      deltas.clear
+
+      # No change (still active + visible) -> no new delta.
+      perform :heartbeat, { tab_visible: true, subject_active: true }
+      expect(deltas).to be_empty
+
+      # active -> idle transition -> exactly one delta.
+      perform :heartbeat, { tab_visible: true, subject_active: false }
+      expect(deltas.size).to eq(1)
+    end
+  end
 end
