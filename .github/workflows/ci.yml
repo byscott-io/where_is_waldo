@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master]
 
+# Least privilege: every job here only reads the repo (checkout + run
+# tests/lint). Locks GITHUB_TOKEN down (CodeQL actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 jobs:
   eslint:
     name: ESLint
@@ -24,6 +29,24 @@ jobs:
 
       - name: Run ESLint
         run: yarn lint
+
+  vitest:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run Vitest
+        run: yarn test
 
   rubocop:
     name: RuboCop
