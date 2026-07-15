@@ -173,15 +173,20 @@ adapts automatically (no client mode config). Modes (default `:pull`):
 | Mode | Latency | Visibility | Cost/transition |
 |------|---------|------------|-----------------|
 | `:pull` (default) | ~poll interval | server-side query — **any** rule | flat (1 cached query/poll) |
+| `:nudge` | near-instant | server-side query — **any** rule | O(1) content-free trigger + filtered poll |
 | `:broadcast` | instant | **none** (everyone in account sees everyone) | O(1) |
 
 `:pull` sends a full **snapshot** on connect, then the client polls and the
 server replies with a server-*filtered* diff (baseline cached per session,
 TTL'd for auto-resync) — so arbitrary/asymmetric visibility "just works" via
-`presence_visible_scope`. `:broadcast` instead streams one shared account stream
-and pushes deltas instantly, with **no** visibility filtering (open-visibility
-accounts only). Additional modes (`:nudge`, `:fanout`, client-filter) are on the
-roadmap — see `docs/PRESENCE_ROSTER_PLAN.md`.
+`presence_visible_scope`. `:nudge` is `:pull` plus a content-free "re-poll"
+broadcast on each transition, so clients refresh near-instantly instead of
+waiting for the next interval — same airtight server-side filtering, just lower
+latency; the nudge carries no identity/state (only "activity happened").
+`:broadcast` instead streams one shared account stream and pushes deltas
+instantly, with **no** visibility filtering (open-visibility accounts only).
+Remaining modes (`:fanout`, client-filter) are on the roadmap — see
+`docs/PRESENCE_ROSTER_PLAN.md`.
 
 **Per-device, multi-session.** A subject's state is aggregated across *all*
 their live sessions (multiple browser tabs, mobile, etc.):

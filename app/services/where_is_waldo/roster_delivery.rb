@@ -18,6 +18,7 @@ module WhereIsWaldo
       case mode.to_sym
       when :broadcast then Broadcast.new
       when :pull then Pull.new
+      when :nudge then Nudge.new
       else
         raise ArgumentError, "Unknown roster_mode: #{mode.inspect}"
       end
@@ -70,10 +71,15 @@ module WhereIsWaldo
     # stale/expired cursor self-heals into a full snapshot. Handles ANY
     # visibility rule via config.presence_visible_scope. No broadcasts.
     class Pull < Base
+      # Overridden by :nudge so the snapshot advertises the right mode.
+      def mode
+        :pull
+      end
+
       def subscribe_plan(subject, session_id)
         current = current_members(subject)
         write_baseline(session_id, current)
-        { streams: [], messages: [Roster.snapshot_message(current.values, mode: :pull)] }
+        { streams: subscribe_streams(subject), messages: [Roster.snapshot_message(current.values, mode: mode)] }
       end
 
       def poll_messages(subject, session_id)
@@ -82,7 +88,7 @@ module WhereIsWaldo
         write_baseline(session_id, current)
 
         # Cache miss / expired cursor -> full snapshot (self-healing resync).
-        return [Roster.snapshot_message(current.values, mode: :pull)] if baseline.nil?
+        return [Roster.snapshot_message(current.values, mode: mode)] if baseline.nil?
 
         diff_messages(baseline, current)
       end
@@ -91,6 +97,12 @@ module WhereIsWaldo
       def on_transition(_subject_id); end
 
       private
+
+      # Streams to subscribe on connect. :pull needs none (data rides the poll
+      # transmit); :nudge overrides this to also receive the account nudge.
+      def subscribe_streams(_subject)
+        []
+      end
 
       def current_members(subject)
         Roster.members_for(config.resolve_visible_scope(subject))
@@ -124,6 +136,28 @@ module WhereIsWaldo
 
       def baseline_key(session_id)
         "where_is_waldo:roster:baseline:#{session_id}"
+      end
+    end
+
+    # Pull, plus a content-free nudge broadcast on transition so clients re-poll
+    # immediately instead of waiting for the next interval — near-instant
+    # latency with the same server-filtered (arbitrary-visibility) delivery. The
+    # nudge carries no identity/state, so it only reveals "activity happened".
+    class Nudge < Pull
+      def mode
+        :nudge
+      end
+
+      def on_transition(subject_id)
+        Roster.publish_nudge(subject_id)
+      end
+
+      private
+
+      # Also subscribe the account stream so this client receives nudges.
+      def subscribe_streams(subject)
+        stream = Roster.stream_name(config.resolve_org(subject))
+        stream ? [stream] : []
       end
     end
   end

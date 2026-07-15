@@ -8,6 +8,8 @@
 // Cable message types exchanged on the roster stream.
 export const ROSTER_SNAPSHOT = 'roster_snapshot';
 export const ROSTER_DELTA = 'roster_delta';
+// Content-free "re-poll now" trigger (:nudge mode). Carries no data.
+export const ROSTER_NUDGE = 'roster_nudge';
 
 // Activity ranking, most-present first. Shared by sorting and by the "highest
 // across devices" roll-up so web and mobile agree.

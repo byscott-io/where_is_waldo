@@ -80,8 +80,9 @@ module WhereIsWaldo
     #     config.roster_mode = ->(account) { account.everyone_admin? ? :broadcast : :pull }
     attr_accessor :roster_mode
 
-    # Tuning (pull/nudge).
-    attr_accessor :roster_poll_interval, :roster_cache_ttl
+    # Tuning (pull/nudge). roster_nudge_jitter (seconds) spreads clients' re-poll
+    # after a nudge so a change doesn't stampede every viewer at once.
+    attr_accessor :roster_poll_interval, :roster_cache_ttl, :roster_nudge_jitter
 
     def initialize
       # Storage defaults
@@ -118,6 +119,7 @@ module WhereIsWaldo
       @roster_mode = :pull
       @roster_poll_interval = 15
       @roster_cache_ttl = 90
+      @roster_nudge_jitter = 0.5
     end
 
     # Helper to get timeout as duration

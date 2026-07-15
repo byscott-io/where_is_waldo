@@ -6,10 +6,12 @@ import {
   onlineMembers,
   isPullMode,
   ROSTER_SNAPSHOT,
+  ROSTER_NUDGE,
 } from '../core/rosterStore';
 
 const DEFAULT_CHANNEL = 'WhereIsWaldo::RosterChannel';
 const DEFAULT_POLL_INTERVAL = 15; // seconds; overridden by the server's snapshot
+const DEFAULT_NUDGE_JITTER = 0.5; // seconds; overridden by the server's snapshot
 
 /**
  * usePresenceRoster - live "who's around" roster as data (bring your own UI).
@@ -40,6 +42,8 @@ export function usePresenceRoster(options = {}) {
 
   const mapRef = useRef(new Map());
   const pollTimerRef = useRef(null);
+  const nudgeTimerRef = useRef(null);
+  const nudgeJitterRef = useRef(DEFAULT_NUDGE_JITTER);
 
   const flush = useCallback(() => {
     setMembers(sortedMembers(mapRef.current));
@@ -62,6 +66,17 @@ export function usePresenceRoster(options = {}) {
       pollTimerRef.current = setTimeout(tick, ms * jitter());
     };
 
+    // :nudge — on a content-free trigger, re-poll off-cycle after a random
+    // jitter (herd control), debounced to one pending re-poll at a time.
+    const scheduleNudgePoll = (subscription) => {
+      if (nudgeTimerRef.current) return;
+      const delay = Math.random() * nudgeJitterRef.current * 1000;
+      nudgeTimerRef.current = setTimeout(() => {
+        nudgeTimerRef.current = null;
+        subscription.perform('poll');
+      }, delay);
+    };
+
     const subscription = consumer.subscriptions.create(
       { channel: channelName },
       {
@@ -74,7 +89,12 @@ export function usePresenceRoster(options = {}) {
         received(message) {
           if (message && message.type === ROSTER_SNAPSHOT) {
             setMode(message.mode || null);
+            if (message.nudge_jitter != null) nudgeJitterRef.current = message.nudge_jitter;
             if (isPullMode(message.mode)) startPolling(subscription, message.poll_interval);
+          }
+          if (message && message.type === ROSTER_NUDGE) {
+            scheduleNudgePoll(subscription);
+            return; // content-free trigger; nothing to reduce
           }
           const next = applyRosterMessage(mapRef.current, message);
           if (next !== mapRef.current) {
@@ -89,6 +109,10 @@ export function usePresenceRoster(options = {}) {
       if (pollTimerRef.current) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
+      }
+      if (nudgeTimerRef.current) {
+        clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = null;
       }
       subscription.unsubscribe();
     };

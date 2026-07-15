@@ -70,11 +70,18 @@ module WhereIsWaldo
       def snapshot_message(members, mode:)
         message = { type: "roster_snapshot", mode: mode.to_s, members: members }
         message[:poll_interval] = WhereIsWaldo.config.roster_poll_interval if %i[pull nudge].include?(mode.to_sym)
+        message[:nudge_jitter] = WhereIsWaldo.config.roster_nudge_jitter if mode.to_sym == :nudge
         message
       end
 
       def delta_message(member)
         { type: "roster_delta", member: member }
+      end
+
+      # Content-free "roster changed, re-poll" trigger (:nudge mode). Carries no
+      # identity/state, so it leaks nothing beyond "activity happened".
+      def nudge_message
+        { type: "roster_nudge" }
       end
 
       # Tells the client to drop a member who left the viewer's visible scope
@@ -114,6 +121,22 @@ module WhereIsWaldo
         true
       rescue StandardError => e
         Rails.logger&.warn("[WhereIsWaldo::Roster] publish failed for #{subject_id}: #{e.class}: #{e.message}")
+        false
+      end
+
+      # Broadcast a content-free nudge to a subject's org roster stream (:nudge
+      # mode). Tells watchers to re-poll; carries no protected data.
+      def publish_nudge(subject_id)
+        return false if subject_id.blank?
+
+        subject = find_subject(subject_id)
+        stream = stream_name(WhereIsWaldo.config.resolve_org(subject))
+        return false unless stream
+
+        ActionCable.server.broadcast(stream, nudge_message)
+        true
+      rescue StandardError => e
+        Rails.logger&.warn("[WhereIsWaldo::Roster] nudge failed for #{subject_id}: #{e.class}: #{e.message}")
         false
       end
 

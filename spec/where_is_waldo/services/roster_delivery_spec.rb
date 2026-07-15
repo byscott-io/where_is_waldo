@@ -73,6 +73,39 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
     end
   end
 
+  describe WhereIsWaldo::RosterDelivery::Nudge do
+    subject(:strategy) { described_class.new }
+
+    it "subscribe_plan streams the account (for nudges) and sends a nudge-mode snapshot" do
+      create(:presence, subject: user, tab_visible: true, subject_active: true)
+
+      plan = strategy.subscribe_plan(user, "sess-1")
+
+      expect(plan[:streams]).to eq(["where_is_waldo:roster:RosterTestOrg:1"])
+      expect(plan[:messages].first).to include(mode: "nudge", nudge_jitter: 0.5)
+    end
+
+    it "poll returns a server-filtered diff just like pull" do
+      presence = create(:presence, subject: user, tab_visible: true, subject_active: true)
+      strategy.subscribe_plan(user, "sess-1")
+
+      presence.update!(subject_active: false)
+      messages = strategy.poll_messages(user, "sess-1")
+
+      expect(messages.first[:member]).to include(id: user.id, status: "idle")
+    end
+
+    it "on_transition broadcasts a content-free nudge (no identity/state)" do
+      allow(ActionCable.server).to receive(:broadcast)
+      create(:presence, subject: user, tab_visible: true, subject_active: true)
+
+      strategy.on_transition(user.id)
+
+      expect(ActionCable.server).to have_received(:broadcast)
+        .with("where_is_waldo:roster:RosterTestOrg:1", { type: "roster_nudge" })
+    end
+  end
+
   describe WhereIsWaldo::RosterDelivery::Broadcast do
     subject(:strategy) { described_class.new }
 
