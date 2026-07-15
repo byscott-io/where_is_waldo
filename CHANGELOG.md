@@ -3,6 +3,15 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.1
+
+### Fixed
+
+- Package the `VERSION` file (and `CHANGELOG.md`) in the gem. `0.1.0`'s gemspec
+  omitted `VERSION`, but `version.rb` reads it at load time, so the installed
+  gem raised `Errno::ENOENT` on require and failed to boot. (npm `0.1.0` was
+  unaffected — it reads its version from `package.json`.)
+
 ## 0.1.0
 
 First release to public **npm** (`@byscott-io/where-is-waldo`) and **RubyGems**

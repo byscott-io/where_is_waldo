@@ -26,6 +26,8 @@ Gem::Specification.new do |spec|
     "lib/**/*",
     "app/**/*",
     "config/**/*",
+    "VERSION",
+    "CHANGELOG.md",
     "LICENSE",
     "README.md"
   ]
