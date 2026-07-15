@@ -6,7 +6,9 @@
   "module": "dist/index.esm.js",
   "files": [
     "dist",
-    "src"
+    "src",
+    "!**/*.test.js",
+    "!**/*.test.jsx"
   ],
   "scripts": {
     "build": "rollup -c",
