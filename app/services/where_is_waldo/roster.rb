@@ -124,6 +124,29 @@ module WhereIsWaldo
         false
       end
 
+      # Per-viewer stream (:fanout mode). Each viewer streams only their own.
+      def viewer_stream(viewer_id)
+        "where_is_waldo:roster:viewer:#{viewer_id}"
+      end
+
+      # Push a subject's delta to every viewer allowed to see them (:fanout
+      # mode). Directional audience (config.presence_audience) makes this correct
+      # for arbitrary/asymmetric visibility, at O(audience) broadcasts.
+      def publish_fanout(subject_id, timeout: nil)
+        return false if subject_id.blank?
+
+        subject = find_subject(subject_id)
+        audience = subject && WhereIsWaldo.config.resolve_audience(subject)
+        return false unless audience
+
+        message = delta_message(build_member_by_id(subject, subject_id, timeout: timeout))
+        audience.pluck(:id).each { |viewer_id| ActionCable.server.broadcast(viewer_stream(viewer_id), message) }
+        true
+      rescue StandardError => e
+        Rails.logger&.warn("[WhereIsWaldo::Roster] fanout failed for #{subject_id}: #{e.class}: #{e.message}")
+        false
+      end
+
       # Broadcast a content-free nudge to a subject's org roster stream (:nudge
       # mode). Tells watchers to re-poll; carries no protected data.
       def publish_nudge(subject_id)

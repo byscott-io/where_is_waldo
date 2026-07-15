@@ -30,11 +30,17 @@ const DEFAULT_NUDGE_JITTER = 0.5; // seconds; overridden by the server's snapsho
  * @param {Object} [options]
  * @param {string} [options.channelName] - override the roster channel name
  * @param {boolean} [options.enabled=true] - when false, no subscription is made
+ * @param {Function} [options.filter] - (member) => boolean. Client-side filter
+ *   applied to the returned members. COSMETIC ONLY — intended for `:broadcast`
+ *   mode, where the full account roster reaches the client and you want to hide
+ *   some rows in the UI. It is NOT an access-control boundary (the unfiltered
+ *   data is already on the client). For enforced visibility use a server-side
+ *   mode (`:pull`/`:nudge`/`:fanout`).
  * @returns {{ members: Array, online: Array, onlineCount: number,
  *             byId: Object, connected: boolean, mode: string|null }}
  */
 export function usePresenceRoster(options = {}) {
-  const { channelName = DEFAULT_CHANNEL, enabled = true } = options;
+  const { channelName = DEFAULT_CHANNEL, enabled = true, filter } = options;
 
   const [members, setMembers] = useState([]);
   const [connected, setConnected] = useState(false);
@@ -118,13 +124,15 @@ export function usePresenceRoster(options = {}) {
     };
   }, [channelName, enabled, flush]);
 
-  const online = onlineMembers(members);
+  // Client-side (cosmetic) filter — see options.filter.
+  const visibleMembers = filter ? members.filter(filter) : members;
+  const online = onlineMembers(visibleMembers);
   const byId = {};
-  members.forEach((m) => {
+  visibleMembers.forEach((m) => {
     byId[m.id] = m;
   });
 
-  return { members, online, onlineCount: online.length, byId, connected, mode };
+  return { members: visibleMembers, online, onlineCount: online.length, byId, connected, mode };
 }
 
 export default usePresenceRoster;

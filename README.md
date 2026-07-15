@@ -174,6 +174,7 @@ adapts automatically (no client mode config). Modes (default `:pull`):
 |------|---------|------------|-----------------|
 | `:pull` (default) | ~poll interval | server-side query — **any** rule | flat (1 cached query/poll) |
 | `:nudge` | near-instant | server-side query — **any** rule | O(1) content-free trigger + filtered poll |
+| `:fanout` | instant | server-side per-viewer — **any** rule (incl. asymmetric) | O(audience) |
 | `:broadcast` | instant | **none** (everyone in account sees everyone) | O(1) |
 
 `:pull` sends a full **snapshot** on connect, then the client polls and the
@@ -183,10 +184,22 @@ TTL'd for auto-resync) — so arbitrary/asymmetric visibility "just works" via
 broadcast on each transition, so clients refresh near-instantly instead of
 waiting for the next interval — same airtight server-side filtering, just lower
 latency; the nudge carries no identity/state (only "activity happened").
-`:broadcast` instead streams one shared account stream and pushes deltas
-instantly, with **no** visibility filtering (open-visibility accounts only).
-Remaining modes (`:fanout`, client-filter) are on the roadmap — see
-`docs/PRESENCE_ROSTER_PLAN.md`.
+`:fanout` pushes instantly to a **per-viewer** stream: on a transition the
+subject's delta goes to every viewer in its directional `presence_audience`
+(the inverse of `presence_visible_scope`), so even *asymmetric* visibility
+(manager-sees-report-but-not-vice-versa) is exact — at O(audience) broadcasts
+per transition. `:broadcast` instead streams one shared account stream and
+pushes deltas instantly, with **no** visibility filtering (open-visibility
+accounts only); pair it with the client `filter` option below for *cosmetic*
+per-viewer hiding.
+
+```jsx
+// :broadcast + cosmetic client filter (NOT a security boundary — the full
+// roster still reaches the client; use a server-side mode to truly enforce).
+const { online } = usePresenceRoster({ filter: (m) => canISee(m.id) });
+```
+
+See `docs/PRESENCE_ROSTER_PLAN.md` for the full mode matrix and tradeoffs.
 
 **Per-device, multi-session.** A subject's state is aggregated across *all*
 their live sessions (multiple browser tabs, mobile, etc.):
@@ -210,9 +223,13 @@ WhereIsWaldo.configure do |config|
   # The org/account a subject belongs to. Required to enable the roster.
   config.presence_org = ->(subject) { subject.account }
 
-  # What a VIEWER may see (:pull/:nudge). Any visibility rule, server-enforced.
-  # Defaults to the viewer's whole org (everyone-sees-everyone) when unset.
+  # What a VIEWER may see (:pull/:nudge/:fanout). Any visibility rule,
+  # server-enforced. Defaults to the viewer's whole org when unset.
   config.presence_visible_scope = ->(viewer) { viewer.visible_users }
+
+  # Who may see a SUBJECT — the inverse of presence_visible_scope. Only needed
+  # for :fanout (enables instant push under asymmetric visibility).
+  config.presence_audience = ->(subject) { subject.visible_to_users }
 
   # Delivery mode, per account. Symbol or a callable resolving account -> mode.
   # MUST be a function of the account (uniform for all its members). Default :pull.
@@ -362,15 +379,17 @@ gem guarantees, and what your app must do:
 - **`subject_data_proc` fans out org-wide.** Every field it returns is
   broadcast to all roster members. Include only what all members may see; keep
   PII out unless intended.
-- **Visibility enforcement depends on the delivery mode.** `:pull` (and the
-  roadmap `:nudge`) filter server-side by `presence_visible_scope` (a
-  `WHERE ... IN` clause) — any rule, enforced, nothing an unauthorized member
-  could read off the wire. `:broadcast` does **no** filtering: it shares one
-  account stream and pushes every member's presence to everyone (`presence_
-  roster` only scopes the initial *snapshot list*, not the live stream). So
-  select `:broadcast` only for accounts with genuinely open visibility; for any
-  restricted visibility use `:pull` (the default). See
-  `docs/PRESENCE_ROSTER_PLAN.md` for the full mode matrix and tradeoffs.
+- **Visibility enforcement depends on the delivery mode.** `:pull`, `:nudge`,
+  and `:fanout` enforce server-side — `:pull`/`:nudge` by `presence_visible_
+  scope` (a `WHERE ... IN` clause), `:fanout` by `presence_audience` — so
+  nothing an unauthorized member could read off the wire. `:broadcast` does
+  **no** filtering: it shares one account stream and pushes every member's
+  presence to everyone (`presence_roster` only scopes the initial *snapshot
+  list*, not the live stream). The client `filter` option is **cosmetic** — the
+  full data still reaches the client — so it is not an access-control boundary.
+  Select `:broadcast` (± client filter) only for genuinely open-visibility
+  accounts; for any restricted visibility use a server-side mode (`:pull` is the
+  default). See `docs/PRESENCE_ROSTER_PLAN.md` for the full mode matrix.
 - **Token in the URL.** The JWT is passed as `?token=…`; use WSS only, keep
   tokens short-lived, and avoid logging query strings. Set
   `config.action_cable.allowed_request_origins` as defense-in-depth.

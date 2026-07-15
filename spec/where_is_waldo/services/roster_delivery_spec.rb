@@ -106,6 +106,50 @@ RSpec.describe WhereIsWaldo::RosterDelivery do
     end
   end
 
+  describe WhereIsWaldo::RosterDelivery::Fanout do
+    subject(:strategy) { described_class.new }
+
+    before do
+      # Asymmetric visibility: `user` (a "manager") is visible only to itself;
+      # `other` (a "report") is visible to both. So audience(user) = [user],
+      # audience(other) = [user, other].
+      WhereIsWaldo.config.presence_audience = lambda do |subject|
+        subject.id == user.id ? User.where(id: user.id) : User.where(id: [user.id, other.id])
+      end
+    end
+
+    it "subscribe_plan streams the viewer's own stream and sends a fanout snapshot" do
+      plan = strategy.subscribe_plan(user, "sess-1")
+
+      expect(plan[:streams]).to eq(["where_is_waldo:roster:viewer:#{user.id}"])
+      expect(plan[:messages].first).to include(mode: "fanout")
+    end
+
+    it "pushes a subject's delta to every viewer in its audience" do
+      allow(ActionCable.server).to receive(:broadcast)
+      create(:presence, subject: other, tab_visible: true, subject_active: true)
+
+      strategy.on_transition(other.id) # audience(other) = [user, other]
+
+      expect(ActionCable.server).to have_received(:broadcast)
+        .with("where_is_waldo:roster:viewer:#{user.id}", hash_including(type: "roster_delta"))
+      expect(ActionCable.server).to have_received(:broadcast)
+        .with("where_is_waldo:roster:viewer:#{other.id}", hash_including(type: "roster_delta"))
+    end
+
+    it "does NOT push to viewers outside the audience (asymmetric visibility)" do
+      allow(ActionCable.server).to receive(:broadcast)
+      create(:presence, subject: user, tab_visible: true, subject_active: true)
+
+      strategy.on_transition(user.id) # audience(user) = [user] only
+
+      expect(ActionCable.server).to have_received(:broadcast)
+        .with("where_is_waldo:roster:viewer:#{user.id}", anything)
+      expect(ActionCable.server).not_to have_received(:broadcast)
+        .with("where_is_waldo:roster:viewer:#{other.id}", anything)
+    end
+  end
+
   describe WhereIsWaldo::RosterDelivery::Broadcast do
     subject(:strategy) { described_class.new }
 

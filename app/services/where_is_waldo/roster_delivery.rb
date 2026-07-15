@@ -19,6 +19,7 @@ module WhereIsWaldo
       when :broadcast then Broadcast.new
       when :pull then Pull.new
       when :nudge then Nudge.new
+      when :fanout then Fanout.new
       else
         raise ArgumentError, "Unknown roster_mode: #{mode.inspect}"
       end
@@ -158,6 +159,25 @@ module WhereIsWaldo
       def subscribe_streams(subject)
         stream = Roster.stream_name(config.resolve_org(subject))
         stream ? [stream] : []
+      end
+    end
+
+    # Instant per-viewer push for arbitrary/asymmetric visibility. Each viewer
+    # streams only their own stream and gets a server-filtered snapshot on
+    # connect; on a transition the subject's delta is pushed to every viewer in
+    # its directional audience (config.presence_audience). O(audience) per
+    # transition — the price of instant delivery under restricted visibility.
+    class Fanout < Base
+      def subscribe_plan(subject, _session_id)
+        members = Roster.members_for(config.resolve_visible_scope(subject))
+        {
+          streams: [Roster.viewer_stream(subject.id)],
+          messages: [Roster.snapshot_message(members.values, mode: :fanout)]
+        }
+      end
+
+      def on_transition(subject_id)
+        Roster.publish_fanout(subject_id)
       end
     end
   end
