@@ -25,6 +25,24 @@ jobs:
       - name: Run ESLint
         run: yarn lint
 
+  vitest:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run Vitest
+        run: yarn test
+
   rubocop:
     name: RuboCop
     runs-on: ubuntu-latest
