@@ -284,10 +284,57 @@ WhereIsWaldo.presence_on(user.id, :mobile)   # => "idle" (per-device)
 #### Reporting presence from mobile
 
 Mobile is "logged in" purely by connecting with `metadata: { platform: "mobile" }`
-and sending the same heartbeat shape as the web client — map the app's
-foreground/background to `tab_visible` and its activity to `subject_active`.
-No server-side changes: `platform` is read from the presence metadata (defaults
-to `"web"`).
+and sending the same heartbeat shape as the web client. The heartbeat/activity
+state machine lives in a DOM-free core, `createPresenceReporter`, that the web
+`usePresence` hook wraps — a React Native app reuses the **same core** and only
+swaps the sensors: map app foreground/background to `setVisible`, and touches to
+`reportActivity`. No server-side changes; `platform` is read from the metadata
+(defaults to `"web"`).
+
+```jsx
+// React Native reporter — same core, native sensors.
+import { useEffect, useRef } from 'react';
+import { AppState, PanResponder } from 'react-native';
+import { createPresenceReporter, configureCable } from '@byscott-io/where-is-waldo';
+
+configureCable({ url: WS_URL, getToken: () => token });
+
+export function usePresenceNative() {
+  const reporterRef = useRef(null);
+
+  useEffect(() => {
+    const reporter = createPresenceReporter({ metadata: { platform: 'mobile' } });
+    reporterRef.current = reporter;
+    reporter.start();
+    reporter.setVisible(AppState.currentState === 'active');
+
+    const sub = AppState.addEventListener('change', (s) =>
+      reporter.setVisible(s === 'active'),
+    );
+    return () => {
+      sub.remove();
+      reporter.stop();
+    };
+  }, []);
+
+  // Feed touches as activity (attach these handlers to your root view).
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        reporterRef.current?.reportActivity();
+        return false; // observe only; don't capture the gesture
+      },
+    }),
+  ).current;
+
+  return pan.panHandlers;
+}
+```
+
+`createPresenceReporter` is pure JS (no DOM), and `@rails/actioncable` works on
+React Native with the built-in `WebSocket` — so the reporter, the roster hook
+(`usePresenceRoster`), and the roster reducer all run unchanged on mobile; only
+the sensors and the view are platform-specific.
 
 ### Client Event Subscriptions
 

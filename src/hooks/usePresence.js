@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getConsumer, handleMessage, getCableConfig } from '../cable';
+import { createPresenceReporter } from '../core/presenceReporter';
 
 const DEFAULT_OPTIONS = {
   channelName: 'WhereIsWaldo::PresenceChannel',
@@ -10,273 +10,113 @@ const DEFAULT_OPTIONS = {
   debug: false,
 };
 
+const initialVisible = () =>
+  typeof document === 'undefined' ? true : document.visibilityState !== 'hidden';
+const initialFocused = () =>
+  typeof document === 'undefined' ? true : document.hasFocus();
+
 /**
- * usePresence - Hook for real-time presence tracking
+ * usePresence - browser presence tracking. This is now a thin DOM-sensor
+ * wrapper around the framework-agnostic core (../core/presenceReporter): it
+ * binds `document`/`window` events to the reporter's `setVisible` /
+ * `reportActivity` inputs and mirrors the reporter's state into React state.
+ * The heartbeat cadence, activity/visibility state machine, and cable
+ * subscription all live in the core, which a React Native reporter reuses.
  *
- * @param {Object} options - Configuration options
- * @param {Object} options.metadata - Metadata to attach to presence
- * @param {string} options.channelName - ActionCable channel name
- * @param {number} options.heartbeatInterval - Heartbeat interval in ms
- * @param {number} options.activityTimeout - Activity timeout in ms
- * @param {boolean} options.trackActivity - Track user activity
- * @param {boolean} options.trackVisibility - Track tab visibility
- * @param {Function} options.onConnected - Callback when connected
- * @param {Function} options.onDisconnected - Callback when disconnected
- * @returns {Object} Presence state and methods
+ * @param {Object} options - see DEFAULT_OPTIONS
+ * @returns {{ connected, sessionId, tabVisible, windowFocused, subjectActive, sendHeartbeat }}
  */
 export function usePresence(options = {}) {
   const config = { ...DEFAULT_OPTIONS, ...options };
 
   const [connected, setConnected] = useState(false);
-  const [tabVisible, setTabVisible] = useState(true);
-  const [windowFocused, setWindowFocused] = useState(document.hasFocus());
-  const [subjectActive, setSubjectActive] = useState(true);
   const [sessionId, setSessionId] = useState(null);
+  const [subjectActive, setSubjectActive] = useState(true);
+  const [tabVisible, setTabVisible] = useState(initialVisible);
+  const [windowFocused, setWindowFocused] = useState(initialFocused);
 
-  const subscriptionRef = useRef(null);
-  const heartbeatIntervalRef = useRef(null);
-  const activityTimeoutRef = useRef(null);
-  const lastActivityTimeRef = useRef(0);
+  const reporterRef = useRef(null);
+  // Latest sensor readings, read by the DOM handlers to compute foreground.
+  const sensorRef = useRef({ tab: initialVisible(), focus: initialFocused() });
 
-  // Debug logging helper
-  const log = useCallback((...args) => {
-    if (config.debug) console.log('[Presence]', ...args);
-  }, [config.debug]);
-
-  // Refs to track latest values for callbacks (avoids stale closures)
-  const stateRef = useRef({ tabVisible: true, windowFocused: true, subjectActive: true });
+  // Create + start the reporter once (re-created only if the channel changes).
   useEffect(() => {
-    stateRef.current = { tabVisible, windowFocused, subjectActive };
-  }, [tabVisible, windowFocused, subjectActive]);
-
-  // Track user activity
-  const handleActivity = useCallback(() => {
-    const { subjectActive: wasActive, tabVisible: currentTabVisible, windowFocused: currentWindowFocused } = stateRef.current;
-    const wasInactive = !wasActive;
-
-    // Always update the last activity timestamp
-    lastActivityTimeRef.current = Date.now();
-
-    log('handleActivity called, wasActive:', wasActive, 'wasInactive:', wasInactive);
-
-    if (wasInactive) {
-      setSubjectActive(true);
-      // Send immediate heartbeat on transition from inactive to active
-      if (subscriptionRef.current) {
-        log('IMMEDIATE heartbeat: inactive -> active');
-        subscriptionRef.current.perform('heartbeat', {
-          tab_visible: currentTabVisible && currentWindowFocused,
-          subject_active: true,
-          last_activity_at: lastActivityTimeRef.current,
-          metadata: config.metadata || {},
-        });
-      } else {
-        log('No subscription, skipping heartbeat');
-      }
-    }
-
-    if (activityTimeoutRef.current) {
-      clearTimeout(activityTimeoutRef.current);
-    }
-
-    activityTimeoutRef.current = setTimeout(() => {
-      log('Activity timeout fired, setting inactive');
-      setSubjectActive(false);
-      // Send immediate heartbeat on transition from active to inactive
-      if (subscriptionRef.current) {
-        log('IMMEDIATE heartbeat: active -> inactive');
-        subscriptionRef.current.perform('heartbeat', {
-          tab_visible: document.visibilityState === 'visible' && document.hasFocus(),
-          subject_active: false,
-          last_activity_at: lastActivityTimeRef.current,
-          metadata: config.metadata || {},
-        });
-      }
-    }, config.activityTimeout);
-  }, [config.activityTimeout, config.metadata, log]);
-
-  // Track tab visibility
-  const handleVisibilityChange = useCallback(() => {
-    const { tabVisible: wasVisible, windowFocused: currentWindowFocused, subjectActive: currentSubjectActive } = stateRef.current;
-    const visible = document.visibilityState === 'visible';
-
-    log('handleVisibilityChange, wasVisible:', wasVisible, 'nowVisible:', visible);
-    setTabVisible(visible);
-
-    // Send immediate heartbeat on any visibility change
-    if (visible !== wasVisible) {
-      if (subscriptionRef.current) {
-        log('IMMEDIATE heartbeat: visibility change', wasVisible, '->', visible);
-        subscriptionRef.current.perform('heartbeat', {
-          tab_visible: visible && currentWindowFocused,
-          subject_active: visible ? true : currentSubjectActive,
-          metadata: config.metadata || {},
-        });
-      } else {
-        log('No subscription, skipping heartbeat');
-      }
-    }
-
-    if (visible) handleActivity();
-  }, [handleActivity, config.metadata, log]);
-
-  // Track window focus/blur
-  const handleWindowFocus = useCallback(() => {
-    const { windowFocused: wasFocused, tabVisible: currentTabVisible } = stateRef.current;
-
-    log('handleWindowFocus, wasFocused:', wasFocused);
-    setWindowFocused(true);
-
-    // Send immediate heartbeat on focus gain
-    if (!wasFocused) {
-      if (subscriptionRef.current) {
-        log('IMMEDIATE heartbeat: window focus gained');
-        subscriptionRef.current.perform('heartbeat', {
-          tab_visible: currentTabVisible,
-          subject_active: true,
-          metadata: config.metadata || {},
-        });
-      } else {
-        log('No subscription, skipping heartbeat');
-      }
-    }
-
-    handleActivity();
-  }, [handleActivity, config.metadata, log]);
-
-  const handleWindowBlur = useCallback(() => {
-    const { windowFocused: wasFocused, subjectActive: currentSubjectActive } = stateRef.current;
-
-    log('handleWindowBlur, wasFocused:', wasFocused);
-    setWindowFocused(false);
-
-    // Send immediate heartbeat on focus loss
-    if (wasFocused) {
-      if (subscriptionRef.current) {
-        log('IMMEDIATE heartbeat: window focus lost');
-        subscriptionRef.current.perform('heartbeat', {
-          tab_visible: false,
-          subject_active: currentSubjectActive,
-          metadata: config.metadata || {},
-        });
-      } else {
-        log('No subscription, skipping heartbeat');
-      }
-    }
-  }, [config.metadata, log]);
-
-  // Send heartbeat (with optional override values for immediate updates)
-  const sendHeartbeat = useCallback((overrides = {}) => {
-    if (subscriptionRef.current) {
-      log('INTERVAL heartbeat');
-      subscriptionRef.current.perform('heartbeat', {
-        tab_visible: overrides.tab_visible ?? (tabVisible && windowFocused),
-        subject_active: overrides.subject_active ?? subjectActive,
-        last_activity_at: lastActivityTimeRef.current,
-        metadata: config.metadata || {},
-      });
-    }
-  }, [tabVisible, windowFocused, subjectActive, config.metadata, log]);
-
-  // Subscribe to channel
-  useEffect(() => {
-    const consumer = getConsumer();
-
-    subscriptionRef.current = consumer.subscriptions.create(
-      {
-        channel: config.channelName,
-        metadata: config.metadata || {},
+    const reporter = createPresenceReporter({
+      channelName: config.channelName,
+      heartbeatInterval: config.heartbeatInterval,
+      activityTimeout: config.activityTimeout,
+      metadata: config.metadata,
+      debug: config.debug,
+      onConnected: config.onConnected,
+      onDisconnected: config.onDisconnected,
+      onChange: (state) => {
+        setConnected(state.connected);
+        setSubjectActive(state.active);
+        if (state.sessionId) setSessionId(state.sessionId);
       },
-      {
-        connected() {
-          setConnected(true);
-          const cableConfig = getCableConfig();
-          if (cableConfig.sessionId) {
-            setSessionId(cableConfig.sessionId);
-          }
-          config.onConnected?.();
-        },
-
-        disconnected() {
-          setConnected(false);
-          config.onDisconnected?.();
-        },
-
-        received(message) {
-          // Check if targeted to specific session
-          if (message._target_session && message._target_session !== sessionId) {
-            return;
-          }
-
-          // Route to registered handler
-          handleMessage(message);
-        },
-      }
-    );
+    });
+    reporterRef.current = reporter;
+    reporter.start();
+    // Seed foreground state from the current sensors.
+    reporter.setVisible(sensorRef.current.tab && sensorRef.current.focus);
 
     return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
-        subscriptionRef.current = null;
-      }
+      reporter.stop();
+      reporterRef.current = null;
     };
   }, [config.channelName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Heartbeat interval
+  // Activity sensors -> reporter.reportActivity()
   useEffect(() => {
-    if (!connected) return;
+    if (!config.trackActivity) return undefined;
 
-    heartbeatIntervalRef.current = setInterval(sendHeartbeat, config.heartbeatInterval);
-
-    return () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
-    };
-  }, [connected, sendHeartbeat, config.heartbeatInterval]);
-
-  // Activity tracking
-  useEffect(() => {
-    if (!config.trackActivity) return;
-
+    const onActivity = () => reporterRef.current?.reportActivity();
     const events = ['mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
-    events.forEach((event) => window.addEventListener(event, handleActivity, { passive: true }));
+    events.forEach((event) => window.addEventListener(event, onActivity, { passive: true }));
 
-    activityTimeoutRef.current = setTimeout(() => {
-      setSubjectActive(false);
-    }, config.activityTimeout);
+    return () => events.forEach((event) => window.removeEventListener(event, onActivity));
+  }, [config.trackActivity]);
 
-    return () => {
-      events.forEach((event) => window.removeEventListener(event, handleActivity));
-      if (activityTimeoutRef.current) {
-        clearTimeout(activityTimeoutRef.current);
-      }
-    };
-  }, [handleActivity, config.trackActivity, config.activityTimeout]);
-
-  // Visibility tracking (tab visibility + window focus)
+  // Visibility + focus sensors -> reporter.setVisible(foreground)
   useEffect(() => {
-    if (!config.trackVisibility) return;
+    if (!config.trackVisibility) return undefined;
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleWindowFocus);
-    window.addEventListener('blur', handleWindowBlur);
+    const pushForeground = () => {
+      reporterRef.current?.setVisible(sensorRef.current.tab && sensorRef.current.focus);
+    };
+    const onVisibility = () => {
+      const visible = document.visibilityState !== 'hidden';
+      sensorRef.current.tab = visible;
+      setTabVisible(visible);
+      pushForeground();
+    };
+    const onFocus = () => {
+      sensorRef.current.focus = true;
+      setWindowFocused(true);
+      pushForeground();
+    };
+    const onBlur = () => {
+      sensorRef.current.focus = false;
+      setWindowFocused(false);
+      pushForeground();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleWindowFocus);
-      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
     };
-  }, [handleVisibilityChange, handleWindowFocus, handleWindowBlur, config.trackVisibility]);
+  }, [config.trackVisibility]);
 
-  return {
-    connected,
-    sessionId,
-    tabVisible,
-    windowFocused,
-    subjectActive,
-    sendHeartbeat,
-  };
+  const sendHeartbeat = useCallback((overrides) => {
+    reporterRef.current?.sendHeartbeat(overrides);
+  }, []);
+
+  return { connected, sessionId, tabVisible, windowFocused, subjectActive, sendHeartbeat };
 }
 
 export default usePresence;
