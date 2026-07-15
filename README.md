@@ -18,8 +18,8 @@ Real-time presence tracking for Rails + React using ActionCable.
 ### 1. Install
 
 ```ruby
-# Gemfile
-gem 'where_is_waldo', github: 'byscott-io/where_is_waldo'
+# Gemfile — published on RubyGems.org
+gem 'where_is_waldo', '~> 0.1'
 ```
 
 ```bash
@@ -32,6 +32,7 @@ rails generate where_is_waldo:install --adapter=redis --subject_column=user_id
 ```
 
 ```bash
+# published on npm (public registry)
 npm install @byscott-io/where-is-waldo @rails/actioncable
 ```
 
