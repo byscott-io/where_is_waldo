@@ -72,6 +72,7 @@
     "access": "public"
   },
   "resolutions": {
-    "qs": "^6.15.2"
+    "qs": "^6.15.2",
+    "systeminformation": "^5.31.17"
   }
 }
