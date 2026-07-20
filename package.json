@@ -29,16 +29,13 @@
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@babel/preset-env": "^7.29.7",
-    "@babel/preset-react": "^7.29.7",
-    "@rollup/plugin-babel": "^7.1.0",
+    "@rails/actioncable": "^8.1.300",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@rails/actioncable": "^8.1.300",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "cypress": "^15.18.1",
+    "esbuild": "^0.28.1",
     "eslint": "^8.50.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -46,6 +43,7 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "rollup": "^4.62.2",
+    "rollup-plugin-esbuild": "^6.2.1",
     "start-server-and-test": "^3.0.11",
     "vitest": "^4.1.10"
   },
