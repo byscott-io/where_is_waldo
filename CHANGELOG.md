@@ -3,7 +3,7 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## 0.1.3
 
 ### Fixed
 
