@@ -71,6 +71,7 @@
   },
   "resolutions": {
     "axios": "^1.18.0",
+    "eslint/**/brace-expansion": "^1.1.16",
     "qs": "^6.15.2",
     "systeminformation": "^5.31.17"
   }
