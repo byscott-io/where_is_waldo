@@ -161,7 +161,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     end
   end
 
-  describe "#sessions_for_subjects" do
+  describe "#sessions_for_subjects" do # rubocop:disable RSpec/MultipleMemoizedHelpers
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
     let(:user_c) { create(:user) }
@@ -201,7 +201,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
 
       grouped = adapter.sessions_for_subjects([user_a.id], timeout: 60)
 
-      expect(grouped[user_a.id].map { |s| s[:session_id] }).to contain_exactly("a-2")
+      expect(grouped[user_a.id].pluck(:session_id)).to contain_exactly("a-2")
     end
 
     it "returns an empty hash for empty input" do

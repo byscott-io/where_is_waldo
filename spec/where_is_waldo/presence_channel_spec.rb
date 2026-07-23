@@ -107,7 +107,7 @@ RSpec.describe WhereIsWaldo::PresenceChannel, type: :channel do
       it "no-ops on unsubscribe (nothing to disconnect from)" do
         subscribe
 
-        expect(WhereIsWaldo::PresenceService).not_to receive(:disconnect)
+        expect(WhereIsWaldo::PresenceService).not_to receive(:disconnect) # rubocop:disable RSpec/MessageSpies
         subscription.unsubscribe_from_channel
       end
 
@@ -151,10 +151,10 @@ RSpec.describe WhereIsWaldo::PresenceChannel, type: :channel do
     context "when the proc receives the connection" do
       it "passes the ActionCable connection so hosts can read session/cookies/env" do
         received = nil
-        WhereIsWaldo.config.suppress_presence_proc = ->(conn) do
+        WhereIsWaldo.config.suppress_presence_proc = lambda { |conn|
           received = conn
           false
-        end
+        }
 
         subscribe
 

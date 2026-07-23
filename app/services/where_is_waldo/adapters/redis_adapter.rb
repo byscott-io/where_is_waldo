@@ -2,7 +2,9 @@
 
 module WhereIsWaldo
   module Adapters
-    class RedisAdapter < BaseAdapter
+    # Redis backing needs more plumbing (keying, TTLs, pipelines) than the
+    # DB adapter, so it legitimately runs past the default class-length limit.
+    class RedisAdapter < BaseAdapter # rubocop:disable Metrics/ClassLength
       def connect(session_id:, subject_id:, metadata: {})
         now = Time.current.to_i
 

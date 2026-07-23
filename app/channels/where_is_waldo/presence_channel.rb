@@ -65,10 +65,14 @@ module WhereIsWaldo
     # the impersonated subject being "here." Nil proc → default behavior
     # (presence always registered).
     def presence_suppressed?
+      # Ivars are @wiw_-prefixed throughout this channel to avoid clobbering
+      # host-app ActionCable state; keep the prefix over the cop's rename.
+      # rubocop:disable Naming/MemoizedInstanceVariableName
       return @wiw_presence_suppressed if defined?(@wiw_presence_suppressed)
 
       proc = WhereIsWaldo.config.suppress_presence_proc
       @wiw_presence_suppressed = proc ? !!proc.call(connection) : false
+      # rubocop:enable Naming/MemoizedInstanceVariableName
     end
 
     def register_presence

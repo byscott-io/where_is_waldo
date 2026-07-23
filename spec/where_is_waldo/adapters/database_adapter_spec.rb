@@ -215,7 +215,7 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
 
       grouped = adapter.sessions_for_subjects([user_a.id], timeout: 60)
 
-      expect(grouped[user_a.id].map { |s| s[:session_id] }).to contain_exactly("a-2")
+      expect(grouped[user_a.id].pluck(:session_id)).to contain_exactly("a-2")
     end
 
     it "returns an empty hash for empty input" do

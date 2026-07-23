@@ -138,7 +138,7 @@ RSpec.describe WhereIsWaldo::Roster do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
 
-    it "returns adapter-supplied hashes verbatim to aggregate()" do
+    it "returns adapter-supplied hashes verbatim to aggregate()" do # rubocop:disable RSpec/ExampleLength
       allow(WhereIsWaldo::PresenceService).to receive(:sessions_for_subjects) do |ids, **|
         pool = {
           user_a.id => [
