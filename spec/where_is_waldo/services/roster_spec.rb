@@ -129,4 +129,70 @@ RSpec.describe WhereIsWaldo::Roster do
       expect(WhereIsWaldo.config.resolve_members(org)).to eq(org.users)
     end
   end
+
+  # The roster used to bypass PresenceService and read Presence.where(...)
+  # directly, which meant a host configured with `adapter = :redis` wrote to
+  # Redis while the roster read an empty `presences` table — dots stayed grey
+  # forever. Route through PresenceService so writes and reads share one store.
+  describe "reads via PresenceService.sessions_for_subjects (adapter-aware)" do
+    let(:user_a) { create(:user) }
+    let(:user_b) { create(:user) }
+
+    it "returns adapter-supplied hashes verbatim to aggregate()" do
+      allow(WhereIsWaldo::PresenceService).to receive(:sessions_for_subjects) do |ids, **|
+        pool = {
+          user_a.id => [
+            { session_id: "a-1", subject_id: user_a.id, tab_visible: true,
+              subject_active: true, metadata: { "platform" => "web" } },
+            { session_id: "a-2", subject_id: user_a.id, tab_visible: true,
+              subject_active: false, metadata: { "platform" => "mobile" } }
+          ],
+          user_b.id => [
+            { session_id: "b-1", subject_id: user_b.id, tab_visible: false,
+              subject_active: false, metadata: { "platform" => "web" } }
+          ]
+        }
+        pool.slice(*ids)
+      end
+
+      expect(described_class.state_for(user_a.id)).to eq(
+        status: "active",
+        devices: { "web" => "active", "mobile" => "idle" }
+      )
+      expect(described_class.state_for(user_b.id)).to eq(
+        status: "background",
+        devices: { "web" => "background" }
+      )
+    end
+
+    it "does NOT touch the Presence table directly" do
+      allow(WhereIsWaldo::PresenceService)
+        .to receive(:sessions_for_subjects)
+        .and_return({})
+
+      # If Roster ever calls Presence.where again, this would fire.
+      allow(WhereIsWaldo::Presence).to receive(:where).and_call_original
+
+      described_class.state_for(user_a.id)
+
+      expect(WhereIsWaldo::Presence).not_to have_received(:where)
+    end
+
+    it "aggregates cleanly when the adapter returns Redis-shaped hashes with string metadata keys" do
+      returned = {
+        user_a.id => [
+          { session_id: "a-1", subject_id: user_a.id, tab_visible: true,
+            subject_active: true, metadata: { "platform" => "web" } }
+        ]
+      }
+      allow(WhereIsWaldo::PresenceService)
+        .to receive(:sessions_for_subjects)
+        .and_return(returned)
+
+      expect(described_class.state_for(user_a.id)).to eq(
+        status: "active",
+        devices: { "web" => "active" }
+      )
+    end
+  end
 end

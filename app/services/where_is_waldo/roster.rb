@@ -165,25 +165,24 @@ module WhereIsWaldo
 
       private
 
-      # Aggregate state for many subjects in one query, keyed by subject id.
+      # Aggregate state for many subjects in one adapter call, keyed by
+      # subject id. Routes through PresenceService so it matches whichever
+      # adapter is configured — reading Presence directly would only work on
+      # `:database`, but the roster snapshot needs to see whatever the writer
+      # sees under `:redis` too.
       def states_for(subject_ids, timeout: nil)
         ids = Array(subject_ids).compact.uniq
         return {} if ids.empty?
 
-        threshold = (timeout || WhereIsWaldo.config.timeout).seconds.ago
-        subject_col = Presence.subject_column
-
-        rows = Presence.where(subject_col => ids)
-                       .where("last_heartbeat > ?", threshold)
-                       .to_a
-
-        rows.group_by { |row| row[subject_col] }
-            .transform_values { |sessions| aggregate(sessions) }
+        WhereIsWaldo::PresenceService
+          .sessions_for_subjects(ids, timeout: timeout)
+          .transform_values { |sessions| aggregate(sessions) }
       end
 
       # Reduce a subject's live sessions to per-device statuses plus an overall
       # roll-up. Sessions are grouped by platform (so several browser tabs form
       # one "web" status); the overall status is the highest across platforms.
+      # @param sessions [Array<Hash>] presence hashes from the adapter
       # @return [Hash] { status: "active", devices: { "web" => "active", ... } }
       def aggregate(sessions)
         devices = sessions.group_by { |s| platform(s) }
@@ -204,13 +203,13 @@ module WhereIsWaldo
       # a hidden tab / backgrounded app is :background; a visible/foreground
       # session is :active when working, else :idle.
       def session_level(session)
-        return :background unless session.tab_visible
+        return :background unless session[:tab_visible]
 
-        session.subject_active ? :active : :idle
+        session[:subject_active] ? :active : :idle
       end
 
       def platform(session)
-        meta = session.metadata
+        meta = session[:metadata]
         value = meta && (meta["platform"] || meta[:platform])
         (value.presence || DEFAULT_PLATFORM).to_s
       end

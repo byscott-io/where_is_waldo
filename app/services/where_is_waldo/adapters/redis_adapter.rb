@@ -93,6 +93,23 @@ module WhereIsWaldo
         end
       end
 
+      def sessions_for_subjects(subject_ids, timeout: nil)
+        ids = Array(subject_ids).compact.uniq
+        return {} if ids.empty?
+
+        threshold = Time.current.to_i - (timeout || default_timeout)
+        ids.each_with_object({}) do |sid, memo|
+          session_ids = redis.smembers(subject_sessions_key(sid))
+          live = session_ids.filter_map do |cid|
+            data = get_presence_data(cid)
+            next unless data && data["last_heartbeat"].to_i >= threshold
+
+            build_presence_hash(data)
+          end
+          memo[sid] = live if live.any?
+        end
+      end
+
       def session_status(session_id)
         data = get_presence_data(session_id)
         return nil unless data

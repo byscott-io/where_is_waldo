@@ -44,6 +44,25 @@ module WhereIsWaldo
         raise NotImplementedError
       end
 
+      # Get live sessions for many subjects in one call, grouped by subject id.
+      # Subjects with no live sessions are omitted from the returned hash.
+      # Adapters should override for efficiency; this default is a correct but
+      # unoptimized fan-out over `sessions_for_subject`.
+      # @param subject_ids [Array<Integer/String>] Subject identifiers
+      # @param timeout [Integer, nil] Seconds threshold; sessions with
+      #   `last_heartbeat` older than `Time.current - timeout` are excluded
+      # @return [Hash{Integer/String => Array<Hash>}] subject_id => sessions
+      def sessions_for_subjects(subject_ids, timeout: nil)
+        ids = Array(subject_ids).compact.uniq
+        return {} if ids.empty?
+
+        threshold = Time.current - (timeout || default_timeout)
+        ids.each_with_object({}) do |sid, memo|
+          live = sessions_for_subject(sid).select { |s| s[:last_heartbeat] && s[:last_heartbeat] >= threshold }
+          memo[sid] = live if live.any?
+        end
+      end
+
       # Get session status
       # @param session_id [String] Session identifier
       # @return [Hash, nil] Presence record or nil

@@ -3,6 +3,53 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.4
+
+### Fixed
+
+- **Roster reads now route through the configured adapter.** Previously
+  `Roster.states_for` (which powers `state_for`, `snapshot`, `members_for`,
+  every roster delta) queried the `Presence` ActiveRecord model directly.
+  Under `adapter = :redis`, writes went to Redis but reads hit an empty (or
+  absent) database table — presence dots stayed grey no matter how many
+  heartbeats came in. `Roster` now calls `PresenceService.sessions_for_subjects`
+  which delegates to whichever adapter is configured, so writes and reads
+  share one store on every adapter.
+
+### Added
+
+- `Adapters::Base#sessions_for_subjects(subject_ids, timeout:)` — bulk-read
+  live sessions grouped by subject id, with a correct-but-unoptimized default
+  implementation that fans out over `sessions_for_subject`. `DatabaseAdapter`
+  overrides it with a single bulk query (`Presence.where(subject_col => ids)`
+  + `includes(:subject)`); `RedisAdapter` overrides with per-subject reads
+  filtered by heartbeat threshold. Timeout defaults to `config.timeout`.
+- `PresenceService.sessions_for_subjects` — public delegate so callers stay
+  off the adapter directly.
+- `Configuration#suppress_presence_proc` — callable that decides, per
+  connection, whether to skip presence registration for that subscriber.
+  Receives the ActionCable connection; returns truthy to suppress. A
+  suppressed subscriber still subscribes normally (streams from
+  `where_is_waldo:subject:<id>`, receives broadcasts, can invoke channel
+  actions) — they just don't register a Presence row / heartbeat / roster
+  transition. Use for cases where the WebSocket session is legitimate but
+  shouldn't be counted as "the subject is present" (e.g. support-user
+  impersonation tabs).
+
+  ```ruby
+  config.suppress_presence_proc = ->(connection) {
+    connection.request.session[:su_user].present?
+  }
+  ```
+
+### Changed
+
+- `Roster.aggregate` / `session_level` / `platform` now consume presence
+  hashes (`session[:tab_visible]`, `session[:metadata]`) — matching the
+  shape every adapter already returned — instead of ActiveRecord `Presence`
+  method calls. No behavior change for callers; existing per-device and
+  per-subject aggregation semantics preserved.
+
 ## 0.1.3
 
 ### Fixed

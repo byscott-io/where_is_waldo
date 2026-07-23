@@ -120,6 +120,16 @@ WhereIsWaldo.configure do |config|
   config.roster_org = ->(user) { user.account }
   config.roster_members = ->(org) { org.users.active }
 
+  # Optional: skip presence registration for specific connections while
+  # keeping them subscribed for broadcasts. Return truthy to suppress. The
+  # subscriber still streams from where_is_waldo:subject:<id> and receives
+  # WhereIsWaldo.broadcast_to messages — they just don't count as present.
+  # Typical use: support-user impersonation tabs shouldn't light up as the
+  # impersonated user in teammates' rosters.
+  config.suppress_presence_proc = ->(connection) {
+    connection.request.session[:su_user].present?
+  }
+
   # Redis adapter
   # config.redis_client = Redis.new(url: ENV["REDIS_URL"])
 end

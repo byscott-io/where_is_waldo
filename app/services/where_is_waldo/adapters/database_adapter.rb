@@ -77,6 +77,17 @@ module WhereIsWaldo
         scope.map(&:as_presence_hash)
       end
 
+      def sessions_for_subjects(subject_ids, timeout: nil)
+        ids = Array(subject_ids).compact.uniq
+        return {} if ids.empty?
+
+        threshold = (timeout || default_timeout).seconds.ago
+        scope = Presence.where(subject_column => ids).where("last_heartbeat > ?", threshold)
+        scope = scope.includes(:subject) if config.subject_class_constant
+        scope.group_by { |row| row[subject_column] }
+             .transform_values { |rows| rows.map(&:as_presence_hash) }
+      end
+
       def session_status(session_id)
         scope = Presence.where(session_column => session_id)
         scope = scope.includes(:subject) if config.subject_class_constant

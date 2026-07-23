@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    where_is_waldo (0.1.3)
+    where_is_waldo (0.1.4)
       rails (>= 7.0)
 
 GEM

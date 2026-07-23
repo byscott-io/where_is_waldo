@@ -5,6 +5,13 @@ module WhereIsWaldo
     def subscribed
       stream_from subject_stream
 
+      # The subject_stream subscription above is unconditional: even when the
+      # subscriber's presence is suppressed (see suppress_presence_proc), the
+      # tab is a legitimate consumer of WhereIsWaldo.broadcast_to signaling
+      # and shouldn't be cut off from messages just because it doesn't count
+      # as "present."
+      return if presence_suppressed?
+
       register_presence
 
       # Seed the local transition gate, resolve the roster delivery strategy for
@@ -16,6 +23,8 @@ module WhereIsWaldo
     end
 
     def unsubscribed
+      return if presence_suppressed?
+
       WhereIsWaldo.disconnect(session_id: waldo_session_id)
 
       # Recompute the subject's aggregate (they may still be present in another
@@ -24,6 +33,8 @@ module WhereIsWaldo
     end
 
     def heartbeat(data)
+      return if presence_suppressed?
+
       data = data.with_indifferent_access
 
       tab_visible = data[:tab_visible] != false
@@ -47,6 +58,18 @@ module WhereIsWaldo
     end
 
     private
+
+    # Memoized per-subscription. Host apps configure suppress_presence_proc
+    # to gate WHICH subscriptions register presence — e.g. a support-user
+    # impersonation tab is a legitimate WS consumer but shouldn't count as
+    # the impersonated subject being "here." Nil proc → default behavior
+    # (presence always registered).
+    def presence_suppressed?
+      return @wiw_presence_suppressed if defined?(@wiw_presence_suppressed)
+
+      proc = WhereIsWaldo.config.suppress_presence_proc
+      @wiw_presence_suppressed = proc ? !!proc.call(connection) : false
+    end
 
     def register_presence
       WhereIsWaldo.connect(

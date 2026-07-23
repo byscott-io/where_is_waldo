@@ -74,6 +74,15 @@ module WhereIsWaldo
       # @return [Array<Hash>] Presence records
       delegate :sessions_for_subject, to: :adapter
 
+      # Get live sessions for many subjects in one call, grouped by subject id.
+      # Preferred over calling `sessions_for_subject` per id when the caller
+      # already has an id list (e.g. roster aggregation) — adapters can (and do)
+      # implement this as a bulk read.
+      # @param subject_ids [Array<Integer/String>] Subject identifiers
+      # @param timeout [Integer, nil] Seconds threshold (defaults to config.timeout)
+      # @return [Hash{Integer/String => Array<Hash>}] subject_id => sessions
+      delegate :sessions_for_subjects, to: :adapter
+
       # Get status of a specific session
       # @param session_id [String] Session identifier
       # @return [Hash, nil] Presence record or nil

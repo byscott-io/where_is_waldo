@@ -161,6 +161,55 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     end
   end
 
+  describe "#sessions_for_subjects" do
+    let(:user_a) { create(:user) }
+    let(:user_b) { create(:user) }
+    let(:user_c) { create(:user) }
+
+    before do
+      adapter.connect(session_id: "a-1", subject_id: user_a.id, metadata: { platform: "web" })
+      adapter.connect(session_id: "a-2", subject_id: user_a.id, metadata: { platform: "mobile" })
+      adapter.connect(session_id: "b-1", subject_id: user_b.id, metadata: { platform: "web" })
+    end
+
+    it "groups the sessions by subject_id" do
+      grouped = adapter.sessions_for_subjects([user_a.id, user_b.id, user_c.id])
+
+      expect(grouped.keys).to contain_exactly(user_a.id, user_b.id)
+      expect(grouped[user_a.id].length).to eq(2)
+      expect(grouped[user_b.id].length).to eq(1)
+    end
+
+    it "omits subjects with no live sessions" do
+      expect(adapter.sessions_for_subjects([user_c.id])).to eq({})
+    end
+
+    it "returns each session in the same hash shape as #sessions_for_subject" do
+      grouped = adapter.sessions_for_subjects([user_a.id])
+      session = grouped[user_a.id].first
+
+      expect(session).to include(:session_id, :subject_id, :tab_visible, :subject_active, :last_heartbeat, :metadata)
+    end
+
+    it "excludes sessions whose last_heartbeat is older than the timeout" do
+      # Rewrite one session's timestamp directly in the stored JSON so it
+      # looks stale — heartbeat() would refresh it.
+      key = "where_is_waldo:session:a-1"
+      raw = JSON.parse(mock_redis.get(key))
+      raw["last_heartbeat"] = 2.hours.ago.to_i
+      mock_redis.set(key, raw.to_json)
+
+      grouped = adapter.sessions_for_subjects([user_a.id], timeout: 60)
+
+      expect(grouped[user_a.id].map { |s| s[:session_id] }).to contain_exactly("a-2")
+    end
+
+    it "returns an empty hash for empty input" do
+      expect(adapter.sessions_for_subjects([])).to eq({})
+      expect(adapter.sessions_for_subjects(nil)).to eq({})
+    end
+  end
+
   describe "#session_status" do
     before { adapter.connect(session_id: session_id, subject_id: user.id) }
 

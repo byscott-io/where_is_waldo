@@ -32,6 +32,23 @@ module WhereIsWaldo
     # :authenticate_proc - proc to authenticate connection, receives request
     attr_accessor :channel_name, :authenticate_proc
 
+    # :suppress_presence_proc - callable that decides, per connection, whether
+    #   to SKIP presence registration for that subscriber. Receives the
+    #   ActionCable connection (host apps can read session/cookies/env off it,
+    #   e.g. via `connection.request`). Returns truthy to suppress.
+    #
+    # A suppressed subscriber still subscribes normally — they receive
+    # broadcasts to `where_is_waldo:subject:<id>` (WhereIsWaldo.broadcast_to*
+    # signaling) and any other Waldo capability — they just don't register a
+    # Presence row / heartbeat / roster transition. Use for cases where the
+    # WebSocket session is legitimate but shouldn't be counted as "the subject
+    # is present", e.g. support-user impersonation tabs.
+    #
+    #   config.suppress_presence_proc = ->(connection) {
+    #     connection.request.session[:su_user].present?
+    #   }
+    attr_accessor :suppress_presence_proc
+
     # Default audience resolver for the Broadcastable concern. A lambda that,
     # given a record, returns the AR scope to broadcast to (e.g. that record's
     # account members). Set once per app to match its container, e.g.:
@@ -106,6 +123,7 @@ module WhereIsWaldo
       # ActionCable defaults
       @channel_name = "WhereIsWaldo::PresenceChannel"
       @authenticate_proc = nil
+      @suppress_presence_proc = nil
 
       # Broadcastable default audience (set per app)
       @broadcast_audience = nil
