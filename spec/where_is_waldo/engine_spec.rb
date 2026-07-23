@@ -42,6 +42,31 @@ RSpec.describe WhereIsWaldo::Engine do
     end
   end
 
+  describe "framework requires" do
+    # spec/dummy/config/application.rb deliberately requires none of these —
+    # it stands in for `rails new --skip-action-cable`. The engine's app/*
+    # classes name them in a superclass position, and Rails::Engine eager loads
+    # every app/* directory, so without these requires such a host dies at boot
+    # with NameError: uninitialized constant
+    # WhereIsWaldo::ApplicationCable::ActionCable.
+    it "loads ActionCable itself" do
+      expect(defined?(ActionCable)).to eq("constant")
+      expect(defined?(ActionCable::Channel::Base)).to eq("constant")
+    end
+
+    it "loads ActiveJob itself" do
+      expect(defined?(ActiveJob::Base)).to eq("constant")
+    end
+
+    it "loads ActiveRecord itself" do
+      expect(defined?(ActiveRecord::Base)).to eq("constant")
+    end
+
+    it "registers the ActionCable railtie so the host gets cable config" do
+      expect(Rails.application.railties.map(&:class)).to include(ActionCable::Engine)
+    end
+  end
+
   describe "eager loading" do
     it "loads the whole engine without raising" do
       expect { Rails.application.eager_load! }.not_to raise_error

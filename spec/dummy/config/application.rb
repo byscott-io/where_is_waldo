@@ -4,12 +4,14 @@ require_relative "boot"
 
 require "rails"
 require "active_model/railtie"
-require "active_record/railtie"
 require "action_controller/railtie"
 require "action_view/railtie"
-require "action_cable/engine"
-require "active_job/railtie"
 require "sprockets/railtie"
+
+# NOTE: action_cable/engine, active_job/railtie and active_record/railtie are
+# deliberately NOT required here. where_is_waldo's engine requires them itself,
+# and this dummy app is what proves it — it stands in for a host built with
+# `rails new --skip-action-cable`. See spec/where_is_waldo/engine_spec.rb.
 
 Bundler.require(*Rails.groups)
 
