@@ -35,14 +35,16 @@ module WhereIsWaldo
 
       # Broadcast to a specific session
       # @param session_id [String] Session identifier
+      # @param subject_id [Integer/String] Subject identifier — required
+      #   to disambiguate colliding session ids across subjects
       # @param message_type [String, Symbol] Message type
       # @param data [Hash] Message payload
-      def broadcast_to_session(session_id, message_type, data = {})
-        status = PresenceService.session_status(session_id)
+      def broadcast_to_session(session_id, subject_id, message_type, data = {})
+        status = PresenceService.session_status(session_id, subject_id)
         return false unless status
 
         message = build_message(message_type, data, target_session: session_id)
-        ActionCable.server.broadcast(subject_stream(status[:subject_id]), message)
+        ActionCable.server.broadcast(subject_stream(subject_id), message)
         true
       end
 

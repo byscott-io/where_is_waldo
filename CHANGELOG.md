@@ -3,6 +3,51 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.5
+
+### Security / correctness
+
+- **Session keys are now namespaced by subject_id.** Both adapters previously
+  keyed session rows by `session_id` alone (`waldo:session:<sid>` in Redis;
+  `unique_by: session_column` upsert in the DB). If two authenticated
+  subjects independently supplied the same `session_id` — client-supplied
+  values, JWT `jti` reuse across users, etc. — one subject's `connect`
+  would overwrite the other's row, and subsequent `heartbeat`/`disconnect`
+  calls could reach into the wrong subject's presence. Now:
+  - **RedisAdapter**: session key is `waldo:session:<subject_id>:<session_id>`.
+    The reverse-map key `waldo:session_subject:<session_id>` is removed —
+    callers must pass `subject_id` to `heartbeat`, `session_status`, and
+    session-scoped `disconnect`, so the disambiguation is at the API
+    boundary rather than a lookup that could return the wrong subject.
+  - **DatabaseAdapter**: `Presence.upsert(unique_by: [subject_column,
+    session_column])`. `heartbeat` / `session_status` / session-scoped
+    `disconnect` all scope by both keys. The install generator's migration
+    template now creates a composite unique index on `(subject_column,
+    session_column)` instead of a unique index on `session_column` alone.
+
+### Breaking API changes
+
+- `heartbeat` — `subject_id:` is now a required kwarg
+  (`heartbeat(session_id:, subject_id:, ...)`).
+- `session_status` — signature is `session_status(session_id, subject_id)`
+  (previously `session_status(session_id)`).
+- `disconnect(session_id:)` — now raises `ArgumentError` when called with
+  `session_id:` but no `subject_id:`. Subject-only `disconnect(subject_id:)`
+  and paired `disconnect(session_id:, subject_id:)` are the two supported
+  shapes.
+- `Broadcaster.broadcast_to_session(session_id, subject_id, message_type, data)`
+  — `subject_id` inserted as the second positional argument (previously
+  `broadcast_to_session(session_id, message_type, data)`).
+
+### DB migration
+
+Hosts on the `:database` adapter must swap the unique index on the presences
+table:
+```ruby
+remove_index :presences, :<session_column>
+add_index :presences, [:<subject_column>, :<session_column>], unique: true
+```
+
 ## 0.1.4
 
 ### Fixed

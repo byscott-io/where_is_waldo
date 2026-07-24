@@ -21,7 +21,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     it "stores session data in Redis" do
       adapter.connect(session_id: session_id, subject_id: user.id)
 
-      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{session_id}"))
+      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}"))
       expect(data["session_id"]).to eq(session_id)
       expect(data["subject_id"]).to eq(user.id)
     end
@@ -48,7 +48,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     it "stores metadata" do
       adapter.connect(session_id: session_id, subject_id: user.id, metadata: { device: "mobile" })
 
-      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{session_id}"))
+      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}"))
       expect(data["metadata"]).to eq({ "device" => "mobile" })
     end
   end
@@ -56,26 +56,32 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
   describe "#disconnect" do
     before { adapter.connect(session_id: session_id, subject_id: user.id) }
 
-    context "by session_id" do
+    context "by session_id (with subject_id)" do
       it "removes session data" do
-        adapter.disconnect(session_id: session_id)
-        expect(mock_redis.get("where_is_waldo:session:#{session_id}")).to be_nil
+        adapter.disconnect(session_id: session_id, subject_id: user.id)
+        expect(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}")).to be_nil
       end
 
       it "removes from subject's sessions set" do
-        adapter.disconnect(session_id: session_id)
+        adapter.disconnect(session_id: session_id, subject_id: user.id)
         sessions = mock_redis.smembers("where_is_waldo:subject:#{user.id}:sessions")
         expect(sessions).not_to include(session_id)
       end
 
       it "removes subject from online set when no sessions remain" do
-        adapter.disconnect(session_id: session_id)
+        adapter.disconnect(session_id: session_id, subject_id: user.id)
         subjects = mock_redis.zrange("where_is_waldo:online_subjects", 0, -1)
         expect(subjects).not_to include(user.id.to_s)
       end
 
       it "returns true" do
-        expect(adapter.disconnect(session_id: session_id)).to be true
+        expect(adapter.disconnect(session_id: session_id, subject_id: user.id)).to be true
+      end
+
+      it "raises when session_id is given without subject_id" do
+        # Without subject_id, a caller-supplied session_id could reach into
+        # another subject's row. Reject at the API boundary.
+        expect { adapter.disconnect(session_id: session_id) }.to raise_error(ArgumentError)
       end
     end
 
@@ -87,8 +93,8 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
       it "removes all sessions for the subject" do
         adapter.disconnect(subject_id: user.id)
 
-        expect(mock_redis.get("where_is_waldo:session:#{session_id}")).to be_nil
-        expect(mock_redis.get("where_is_waldo:session:#{other_session}")).to be_nil
+        expect(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}")).to be_nil
+        expect(mock_redis.get("where_is_waldo:session:#{user.id}:#{other_session}")).to be_nil
       end
     end
   end
@@ -99,26 +105,26 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     it "updates last_heartbeat timestamp" do
       freeze_time do
         travel 1.minute
-        adapter.heartbeat(session_id: session_id)
+        adapter.heartbeat(session_id: session_id, subject_id: user.id)
 
-        data = JSON.parse(mock_redis.get("where_is_waldo:session:#{session_id}"))
+        data = JSON.parse(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}"))
         expect(data["last_heartbeat"]).to eq(Time.current.to_i)
       end
     end
 
     it "updates tab_visible" do
-      adapter.heartbeat(session_id: session_id, tab_visible: false)
+      adapter.heartbeat(session_id: session_id, subject_id: user.id, tab_visible: false)
 
-      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{session_id}"))
+      data = JSON.parse(mock_redis.get("where_is_waldo:session:#{user.id}:#{session_id}"))
       expect(data["tab_visible"]).to be false
     end
 
     it "returns true on success" do
-      expect(adapter.heartbeat(session_id: session_id)).to be true
+      expect(adapter.heartbeat(session_id: session_id, subject_id: user.id)).to be true
     end
 
     it "returns false when session not found" do
-      expect(adapter.heartbeat(session_id: "nonexistent")).to be false
+      expect(adapter.heartbeat(session_id: "nonexistent", subject_id: user.id)).to be false
     end
   end
 
@@ -194,7 +200,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     it "excludes sessions whose last_heartbeat is older than the timeout" do
       # Rewrite one session's timestamp directly in the stored JSON so it
       # looks stale — heartbeat() would refresh it.
-      key = "where_is_waldo:session:a-1"
+      key = "where_is_waldo:session:#{user_a.id}:a-1"
       raw = JSON.parse(mock_redis.get(key))
       raw["last_heartbeat"] = 2.hours.ago.to_i
       mock_redis.set(key, raw.to_json)
@@ -210,11 +216,58 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     end
   end
 
+  # If two authenticated subjects independently supplied the same
+  # session_id, the pre-0.1.5 keyspace (`waldo:session:<sid>` global) let one
+  # subject's connect overwrite the other's row. 0.1.5 namespaces the primary
+  # key by subject_id so both rows coexist and no cross-subject clobber is
+  # possible.
+  describe "session-id collision isolation" do # rubocop:disable RSpec/MultipleMemoizedHelpers
+    let(:user_a) { create(:user) }
+    let(:user_b) { create(:user) }
+    let(:shared) { "collision-session-id" }
+
+    it "does not let one subject's connect overwrite another subject's row" do
+      adapter.connect(session_id: shared, subject_id: user_a.id, metadata: { device: "a-tab" })
+      adapter.connect(session_id: shared, subject_id: user_b.id, metadata: { device: "b-tab" })
+
+      a_row = adapter.session_status(shared, user_a.id)
+      b_row = adapter.session_status(shared, user_b.id)
+
+      expect(a_row[:subject_id]).to eq(user_a.id)
+      expect(a_row[:metadata]).to eq({ "device" => "a-tab" })
+      expect(b_row[:subject_id]).to eq(user_b.id)
+      expect(b_row[:metadata]).to eq({ "device" => "b-tab" })
+    end
+
+    it "heartbeats only the row for the given (subject, session) pair" do
+      adapter.connect(session_id: shared, subject_id: user_a.id)
+      adapter.connect(session_id: shared, subject_id: user_b.id)
+
+      # heartbeat A with new metadata; B's row must be untouched
+      adapter.heartbeat(session_id: shared, subject_id: user_a.id, metadata: { touched: "a" })
+
+      a_row = adapter.session_status(shared, user_a.id)
+      b_row = adapter.session_status(shared, user_b.id)
+      expect(a_row[:metadata]).to include("touched" => "a")
+      expect(b_row[:metadata]).not_to include("touched")
+    end
+
+    it "disconnects only the specified subject's session" do
+      adapter.connect(session_id: shared, subject_id: user_a.id)
+      adapter.connect(session_id: shared, subject_id: user_b.id)
+
+      adapter.disconnect(session_id: shared, subject_id: user_a.id)
+
+      expect(adapter.session_status(shared, user_a.id)).to be_nil
+      expect(adapter.session_status(shared, user_b.id)).not_to be_nil
+    end
+  end
+
   describe "#session_status" do
     before { adapter.connect(session_id: session_id, subject_id: user.id) }
 
     it "returns session status hash" do
-      status = adapter.session_status(session_id)
+      status = adapter.session_status(session_id, user.id)
 
       expect(status[:session_id]).to eq(session_id)
       expect(status[:subject_id]).to eq(user.id)
@@ -222,7 +275,7 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
     end
 
     it "returns nil for nonexistent session" do
-      expect(adapter.session_status("nonexistent")).to be_nil
+      expect(adapter.session_status("nonexistent", user.id)).to be_nil
     end
   end
 end

@@ -25,7 +25,7 @@ module WhereIsWaldo
     def unsubscribed
       return if presence_suppressed?
 
-      WhereIsWaldo.disconnect(session_id: waldo_session_id)
+      WhereIsWaldo.disconnect(session_id: waldo_session_id, subject_id: waldo_subject_id)
 
       # Recompute the subject's aggregate (they may still be present in another
       # tab/device) and announce the change to the org roster.
@@ -42,6 +42,7 @@ module WhereIsWaldo
 
       WhereIsWaldo.heartbeat(
         session_id: waldo_session_id,
+        subject_id: waldo_subject_id,
         tab_visible: tab_visible,
         subject_active: subject_active,
         last_activity_at: data[:last_activity_at],
