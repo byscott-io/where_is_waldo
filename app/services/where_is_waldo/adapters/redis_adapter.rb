@@ -20,17 +20,15 @@ module WhereIsWaldo
         }
 
         redis.multi do |tx|
-          # Store session data
-          tx.set(session_key(session_id), presence_data.to_json, ex: ttl)
+          # Session key includes subject_id so two subjects with the same
+          # caller-supplied session_id can't overwrite each other's row.
+          tx.set(session_key(subject_id, session_id), presence_data.to_json, ex: ttl)
 
           # Add to online subjects sorted set with timestamp as score
           tx.zadd(online_subjects_key, now, subject_id)
 
           # Add to subject's sessions set
           tx.sadd(subject_sessions_key(subject_id), session_id)
-
-          # Map session to subject for reverse lookup
-          tx.set(session_subject_key(session_id), subject_id, ex: ttl)
         end
 
         true
@@ -41,19 +39,25 @@ module WhereIsWaldo
 
       def disconnect(session_id: nil, subject_id: nil)
         if session_id
-          disconnect_session(session_id)
+          raise ArgumentError, "disconnect(session_id:) requires subject_id:" unless subject_id
+
+          disconnect_session(subject_id, session_id)
         elsif subject_id
           disconnect_subject(subject_id)
         end
 
         true
+      rescue ArgumentError
+        raise
       rescue StandardError => e
         Rails.logger.error "[WhereIsWaldo] Redis disconnect failed: #{e.message}"
         false
       end
 
-      def heartbeat(session_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
-        data = get_presence_data(session_id)
+      # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+      def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+        # rubocop:enable Metrics/ParameterLists, Layout/LineLength
+        data = get_presence_data(subject_id, session_id)
         return false unless data
 
         now = Time.current.to_i
@@ -69,7 +73,7 @@ module WhereIsWaldo
         data["metadata"] = data["metadata"].merge(metadata) if metadata.present?
 
         redis.multi do |tx|
-          tx.set(session_key(session_id), data.to_json, ex: ttl)
+          tx.set(session_key(subject_id, session_id), data.to_json, ex: ttl)
           tx.zadd(online_subjects_key, now, data["subject_id"])
         end
 
@@ -90,7 +94,7 @@ module WhereIsWaldo
         session_ids = redis.smembers(subject_sessions_key(subject_id))
 
         session_ids.filter_map do |sid|
-          data = get_presence_data(sid)
+          data = get_presence_data(subject_id, sid)
           build_presence_hash(data) if data
         end
       end
@@ -103,7 +107,7 @@ module WhereIsWaldo
         ids.each_with_object({}) do |sid, memo|
           session_ids = redis.smembers(subject_sessions_key(sid))
           live = session_ids.filter_map do |cid|
-            data = get_presence_data(cid)
+            data = get_presence_data(sid, cid)
             next unless data && data["last_heartbeat"].to_i >= threshold
 
             build_presence_hash(data)
@@ -112,8 +116,8 @@ module WhereIsWaldo
         end
       end
 
-      def session_status(session_id)
-        data = get_presence_data(session_id)
+      def session_status(session_id, subject_id)
+        data = get_presence_data(subject_id, session_id)
         return nil unless data
 
         build_presence_hash(data)
@@ -130,7 +134,7 @@ module WhereIsWaldo
           # Check if any sessions are still active
           session_ids = redis.smembers(subject_sessions_key(subject_id))
           all_stale = session_ids.all? do |sid|
-            data = get_presence_data(sid)
+            data = get_presence_data(subject_id, sid)
             !data || data["last_heartbeat"].to_i < threshold
           end
 
@@ -160,8 +164,11 @@ module WhereIsWaldo
         config.redis_prefix || "where_is_waldo"
       end
 
-      def session_key(session_id)
-        "#{key_prefix}:session:#{session_id}"
+      # Session data key. Namespaced by subject_id so a caller-supplied
+      # session_id colliding across two authenticated subjects doesn't let one
+      # clobber the other's presence row (see CHANGELOG 0.1.5).
+      def session_key(subject_id, session_id)
+        "#{key_prefix}:session:#{subject_id}:#{session_id}"
       end
 
       def online_subjects_key
@@ -172,27 +179,17 @@ module WhereIsWaldo
         "#{key_prefix}:subject:#{subject_id}:sessions"
       end
 
-      def session_subject_key(session_id)
-        "#{key_prefix}:session_subject:#{session_id}"
-      end
-
-      def get_presence_data(session_id)
-        json = redis.get(session_key(session_id))
+      def get_presence_data(subject_id, session_id)
+        json = redis.get(session_key(subject_id, session_id))
         return nil unless json
 
         JSON.parse(json)
       end
 
-      def disconnect_session(session_id)
-        data = get_presence_data(session_id)
-        return unless data
-
-        subject_id = data["subject_id"]
-
+      def disconnect_session(subject_id, session_id)
         redis.multi do |tx|
-          tx.del(session_key(session_id))
+          tx.del(session_key(subject_id, session_id))
           tx.srem(subject_sessions_key(subject_id), session_id)
-          tx.del(session_subject_key(session_id))
         end
 
         # If no more sessions for this subject, remove from online set
@@ -202,7 +199,7 @@ module WhereIsWaldo
 
       def disconnect_subject(subject_id)
         session_ids = redis.smembers(subject_sessions_key(subject_id))
-        session_ids.each { |sid| disconnect_session(sid) }
+        session_ids.each { |sid| disconnect_session(subject_id, sid) }
         redis.zrem(online_subjects_key, subject_id)
       end
 

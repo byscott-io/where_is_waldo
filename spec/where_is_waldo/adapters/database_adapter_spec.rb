@@ -51,15 +51,19 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
   describe "#disconnect" do
     before { adapter.connect(session_id: session_id, subject_id: user.id) }
 
-    context "by session_id" do
+    context "by session_id (with subject_id)" do
       it "removes the presence record" do
         expect do
-          adapter.disconnect(session_id: session_id)
+          adapter.disconnect(session_id: session_id, subject_id: user.id)
         end.to change(WhereIsWaldo::Presence, :count).by(-1)
       end
 
       it "returns true" do
-        expect(adapter.disconnect(session_id: session_id)).to be true
+        expect(adapter.disconnect(session_id: session_id, subject_id: user.id)).to be true
+      end
+
+      it "raises when session_id is given without subject_id" do
+        expect { adapter.disconnect(session_id: session_id) }.to raise_error(ArgumentError)
       end
     end
 
@@ -82,20 +86,20 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
     it "updates last_heartbeat" do
       freeze_time do
         travel 1.minute
-        adapter.heartbeat(session_id: session_id)
+        adapter.heartbeat(session_id: session_id, subject_id: user.id)
         presence = WhereIsWaldo::Presence.last
         expect(presence.last_heartbeat).to eq(Time.current)
       end
     end
 
     it "updates tab_visible" do
-      adapter.heartbeat(session_id: session_id, tab_visible: false)
+      adapter.heartbeat(session_id: session_id, subject_id: user.id, tab_visible: false)
       presence = WhereIsWaldo::Presence.last
       expect(presence.tab_visible).to be false
     end
 
     it "updates subject_active" do
-      adapter.heartbeat(session_id: session_id, subject_active: false)
+      adapter.heartbeat(session_id: session_id, subject_id: user.id, subject_active: false)
       presence = WhereIsWaldo::Presence.last
       expect(presence.subject_active).to be false
     end
@@ -103,7 +107,7 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
     it "updates last_activity when subject_active is true" do
       original_activity = WhereIsWaldo::Presence.last.last_activity
       travel 1.minute
-      adapter.heartbeat(session_id: session_id, subject_active: true)
+      adapter.heartbeat(session_id: session_id, subject_id: user.id, subject_active: true)
       presence = WhereIsWaldo::Presence.last
       expect(presence.last_activity).to be > original_activity
     end
@@ -111,17 +115,17 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
     it "does not update last_activity when subject_active is false" do
       original_activity = WhereIsWaldo::Presence.last.last_activity
       travel 1.minute
-      adapter.heartbeat(session_id: session_id, subject_active: false)
+      adapter.heartbeat(session_id: session_id, subject_id: user.id, subject_active: false)
       presence = WhereIsWaldo::Presence.last
       expect(presence.last_activity).to eq(original_activity)
     end
 
     it "returns true on success" do
-      expect(adapter.heartbeat(session_id: session_id)).to be true
+      expect(adapter.heartbeat(session_id: session_id, subject_id: user.id)).to be true
     end
 
     it "returns false when session not found" do
-      expect(adapter.heartbeat(session_id: "nonexistent")).to be false
+      expect(adapter.heartbeat(session_id: "nonexistent", subject_id: user.id)).to be false
     end
   end
 
@@ -148,6 +152,39 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
       adapter.connect(session_id: "session-3", subject_id: user.id)
       ids = adapter.online_subject_ids
       expect(ids.count(user.id)).to eq(1)
+    end
+  end
+
+  # If two subjects independently supplied the same session_id, the pre-0.1.5
+  # `unique_by: session_column` upsert let one subject's connect overwrite the
+  # other's row. 0.1.5 makes the unique key `(subject_column, session_column)`
+  # so both rows coexist and no cross-subject clobber is possible.
+  describe "session-id collision isolation" do
+    let(:user_a) { create(:user) }
+    let(:user_b) { create(:user) }
+    let(:shared) { "collision-session-id" }
+
+    it "does not let one subject's connect overwrite another subject's row" do
+      expect do
+        adapter.connect(session_id: shared, subject_id: user_a.id, metadata: { device: "a-tab" })
+        adapter.connect(session_id: shared, subject_id: user_b.id, metadata: { device: "b-tab" })
+      end.to change(WhereIsWaldo::Presence, :count).by(2)
+
+      a_row = adapter.session_status(shared, user_a.id)
+      b_row = adapter.session_status(shared, user_b.id)
+
+      expect(a_row[:metadata]).to eq({ "device" => "a-tab" })
+      expect(b_row[:metadata]).to eq({ "device" => "b-tab" })
+    end
+
+    it "disconnects only the specified subject's session" do
+      adapter.connect(session_id: shared, subject_id: user_a.id)
+      adapter.connect(session_id: shared, subject_id: user_b.id)
+
+      expect { adapter.disconnect(session_id: shared, subject_id: user_a.id) }
+        .to change(WhereIsWaldo::Presence, :count).by(-1)
+      expect(adapter.session_status(shared, user_a.id)).to be_nil
+      expect(adapter.session_status(shared, user_b.id)).not_to be_nil
     end
   end
 
@@ -244,7 +281,7 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
     before { adapter.connect(session_id: session_id, subject_id: user.id) }
 
     it "returns session status hash" do
-      status = adapter.session_status(session_id)
+      status = adapter.session_status(session_id, user.id)
 
       expect(status[:session_id]).to eq(session_id)
       expect(status[:subject_id]).to eq(user.id)
@@ -252,7 +289,7 @@ RSpec.describe WhereIsWaldo::Adapters::DatabaseAdapter do
     end
 
     it "returns nil for nonexistent session" do
-      expect(adapter.session_status("nonexistent")).to be_nil
+      expect(adapter.session_status("nonexistent", user.id)).to be_nil
     end
   end
 

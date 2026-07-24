@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    where_is_waldo (0.1.4)
+    where_is_waldo (0.1.5)
       rails (>= 7.0)
 
 GEM
@@ -142,6 +142,8 @@ GEM
     net-smtp (0.5.1)
       net-protocol
     nio4r (2.7.5)
+    nokogiri (1.19.4-arm64-darwin)
+      racc (~> 1.4)
     nokogiri (1.19.4-x86_64-linux-gnu)
       racc (~> 1.4)
     parallel (1.27.0)
@@ -271,6 +273,7 @@ GEM
       actionpack (>= 6.1)
       activesupport (>= 6.1)
       sprockets (>= 3.0.0)
+    sqlite3 (2.9.0-arm64-darwin)
     sqlite3 (2.9.0-x86_64-linux-gnu)
     thor (1.5.0)
     timeout (0.6.1)
@@ -289,6 +292,7 @@ GEM
     zeitwerk (2.8.2)
 
 PLATFORMS
+  arm64-darwin-25
   x86_64-linux
 
 DEPENDENCIES

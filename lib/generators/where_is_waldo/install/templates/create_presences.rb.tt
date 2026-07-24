@@ -22,10 +22,15 @@ class Create<%= table_name.camelize %> < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    # Session must be unique
-    add_index :<%= table_name %>, :<%= session_column %>, unique: true
+    # (subject, session) must be unique together. Keying by session alone
+    # would let two authenticated subjects that happen to collide on a
+    # session id (client-supplied values, JWT jti reuse, etc.) upsert onto
+    # each other's row.
+    add_index :<%= table_name %>, [:<%= subject_column %>, :<%= session_column %>], unique: true
 
-    # Query by subject
+    # Session lookups (heartbeat, disconnect, session_status) always scope
+    # by (subject, session); the composite unique index above serves those.
+    # Query by subject alone
     add_index :<%= table_name %>, :<%= subject_column %>
 
     # Cleanup old records

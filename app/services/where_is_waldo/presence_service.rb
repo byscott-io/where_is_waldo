@@ -29,14 +29,20 @@ module WhereIsWaldo
 
       # Update heartbeat for a session
       # @param session_id [String] Session identifier
+      # @param subject_id [Integer/String] Subject identifier (required —
+      #   pairs with session_id to disambiguate colliding session ids across
+      #   subjects)
       # @param tab_visible [Boolean] Is tab in foreground
       # @param subject_active [Boolean] Recent activity
       # @param last_activity_at [Integer] Unix timestamp (ms) of last user activity
       # @param metadata [Hash] Additional data to merge
       # @return [Boolean] success
-      def heartbeat(session_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+      # rubocop:disable Metrics/ParameterLists, Layout/LineLength
+      def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+        # rubocop:enable Metrics/ParameterLists, Layout/LineLength
         adapter.heartbeat(
           session_id: session_id,
+          subject_id: subject_id,
           tab_visible: tab_visible,
           subject_active: subject_active,
           last_activity_at: last_activity_at,
@@ -85,6 +91,8 @@ module WhereIsWaldo
 
       # Get status of a specific session
       # @param session_id [String] Session identifier
+      # @param subject_id [Integer/String] Subject identifier — required
+      #   for the same reason as heartbeat
       # @return [Hash, nil] Presence record or nil
       delegate :session_status, to: :adapter
 

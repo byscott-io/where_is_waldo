@@ -23,7 +23,7 @@ ActiveRecord::Schema[8.1].define(version: 2024_01_01_000000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["last_heartbeat"], name: "index_presences_on_last_heartbeat"
-    t.index ["session_id"], name: "index_presences_on_session_id", unique: true
+    t.index ["user_id", "session_id"], name: "index_presences_on_user_id_and_session_id", unique: true
     t.index ["user_id"], name: "index_presences_on_user_id"
   end
 
