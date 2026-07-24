@@ -24,7 +24,7 @@ RSpec.describe WhereIsWaldo::PresenceService do
 
     it "removes presence" do
       expect do
-        described_class.disconnect(session_id: session_id)
+        described_class.disconnect(session_id: session_id, subject_id: user.id)
       end.to change(WhereIsWaldo::Presence, :count).by(-1)
     end
   end
@@ -35,7 +35,7 @@ RSpec.describe WhereIsWaldo::PresenceService do
     it "updates heartbeat" do
       freeze_time do
         travel 1.minute
-        described_class.heartbeat(session_id: session_id)
+        described_class.heartbeat(session_id: session_id, subject_id: user.id)
         presence = WhereIsWaldo::Presence.last
         expect(presence.last_heartbeat).to eq(Time.current)
       end
@@ -104,12 +104,12 @@ RSpec.describe WhereIsWaldo::PresenceService do
     before { described_class.connect(session_id: session_id, subject_id: user.id) }
 
     it "returns status for a session" do
-      result = described_class.session_status(session_id)
+      result = described_class.session_status(session_id, user.id)
       expect(result[:session_id]).to eq(session_id)
     end
 
     it "returns nil for nonexistent session" do
-      expect(described_class.session_status("nonexistent")).to be_nil
+      expect(described_class.session_status("nonexistent", user.id)).to be_nil
     end
   end
 

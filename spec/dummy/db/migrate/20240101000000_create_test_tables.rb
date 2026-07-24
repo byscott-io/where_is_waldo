@@ -21,7 +21,7 @@ class CreateTestTables < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :presences, :session_id, unique: true
+    add_index :presences, [:user_id, :session_id], unique: true
     add_index :presences, :user_id
     add_index :presences, :last_heartbeat
   end

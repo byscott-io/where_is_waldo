@@ -19,8 +19,12 @@ module WhereIsWaldo
           updated_at: now
         }
 
+        # (subject, session) is the unique key — see the install migration
+        # template. Keying on session alone would let a caller-supplied
+        # session_id colliding across two subjects upsert onto each other's
+        # row.
         # rubocop:disable Rails/SkipsModelValidations -- intentional for performance
-        Presence.upsert(attrs, unique_by: session_column)
+        Presence.upsert(attrs, unique_by: [subject_column, session_column])
         # rubocop:enable Rails/SkipsModelValidations
         true
       rescue StandardError => e
@@ -29,15 +33,21 @@ module WhereIsWaldo
       end
 
       def disconnect(session_id: nil, subject_id: nil)
+        if session_id
+          raise ArgumentError, "disconnect(session_id:) requires subject_id:" unless subject_id
+        end
+
         scope = build_lookup_scope(session_id: session_id, subject_id: subject_id)
         scope.delete_all
         true
+      rescue ArgumentError
+        raise
       rescue StandardError => e
         Rails.logger.error "[WhereIsWaldo] Disconnect failed: #{e.message}"
         false
       end
 
-      def heartbeat(session_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+      def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
         now = Time.current
         updates = {
           last_heartbeat: now,
@@ -53,7 +63,9 @@ module WhereIsWaldo
         end
         updates[:metadata] = metadata if metadata.present?
 
-        scope = Presence.where(session_column => session_id)
+        # Scope by both — a caller-supplied session_id shouldn't be able to
+        # heartbeat another subject's row.
+        scope = Presence.where(session_column => session_id, subject_column => subject_id)
 
         # rubocop:disable Rails/SkipsModelValidations -- intentional for performance
         scope.update_all(updates).positive?
@@ -88,8 +100,8 @@ module WhereIsWaldo
              .transform_values { |rows| rows.map(&:as_presence_hash) }
       end
 
-      def session_status(session_id)
-        scope = Presence.where(session_column => session_id)
+      def session_status(session_id, subject_id)
+        scope = Presence.where(session_column => session_id, subject_column => subject_id)
         scope = scope.includes(:subject) if config.subject_class_constant
         scope.first&.as_presence_hash
       end
@@ -102,8 +114,8 @@ module WhereIsWaldo
       private
 
       def build_lookup_scope(session_id: nil, subject_id: nil)
-        if session_id
-          Presence.where(session_column => session_id)
+        if session_id && subject_id
+          Presence.where(session_column => session_id, subject_column => subject_id)
         elsif subject_id
           Presence.where(subject_column => subject_id)
         else

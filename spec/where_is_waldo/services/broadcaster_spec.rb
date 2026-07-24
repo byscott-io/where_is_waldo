@@ -83,7 +83,7 @@ RSpec.describe WhereIsWaldo::Broadcaster do
     end
 
     it "broadcasts with target session marker" do
-      described_class.broadcast_to_session(session_id, :warning, { msg: "test" })
+      described_class.broadcast_to_session(session_id, user.id, :warning, { msg: "test" })
 
       expect(ActionCable.server).to have_received(:broadcast) do |_stream, message|
         expect(message[:_target_session]).to eq(session_id)
@@ -91,11 +91,11 @@ RSpec.describe WhereIsWaldo::Broadcaster do
     end
 
     it "returns true on success" do
-      expect(described_class.broadcast_to_session(session_id, :warning, {})).to be true
+      expect(described_class.broadcast_to_session(session_id, user.id, :warning, {})).to be true
     end
 
     it "returns false for nonexistent session" do
-      expect(described_class.broadcast_to_session("nonexistent", :warning, {})).to be false
+      expect(described_class.broadcast_to_session("nonexistent", user.id, :warning, {})).to be false
     end
   end
 end

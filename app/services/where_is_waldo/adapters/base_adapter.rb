@@ -12,9 +12,11 @@ module WhereIsWaldo
         raise NotImplementedError
       end
 
-      # Remove a presence
-      # @param session_id [String] Session identifier (optional if subject_id provided)
-      # @param subject_id [Integer/String] Subject identifier (optional)
+      # Remove a presence. Session-scoped disconnect requires both keys so
+      # a caller-supplied session_id can't disconnect another subject's row.
+      # Subject-only disconnect removes every session for that subject.
+      # @param session_id [String] Session identifier (requires subject_id when set)
+      # @param subject_id [Integer/String] Subject identifier
       # @return [Boolean] success
       def disconnect(session_id: nil, subject_id: nil)
         raise NotImplementedError
@@ -22,11 +24,14 @@ module WhereIsWaldo
 
       # Update heartbeat
       # @param session_id [String] Session identifier
+      # @param subject_id [Integer/String] Subject identifier (required —
+      #   pairs with session_id to disambiguate colliding session ids across
+      #   subjects)
       # @param tab_visible [Boolean] Is tab in foreground
       # @param subject_active [Boolean] Recent activity
       # @param metadata [Hash] Additional data
       # @return [Boolean] success
-      def heartbeat(session_id:, tab_visible: true, subject_active: true, metadata: {})
+      def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, metadata: {})
         raise NotImplementedError
       end
 
@@ -65,8 +70,10 @@ module WhereIsWaldo
 
       # Get session status
       # @param session_id [String] Session identifier
+      # @param subject_id [Integer/String] Subject identifier — required
+      #   for the same reason as heartbeat (see above)
       # @return [Hash, nil] Presence record or nil
-      def session_status(session_id)
+      def session_status(session_id, subject_id)
         raise NotImplementedError
       end
 
