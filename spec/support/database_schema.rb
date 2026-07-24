@@ -20,7 +20,7 @@ ActiveRecord::Schema.define do
     t.timestamps
   end
 
-  add_index :presences, [:user_id, :session_id], unique: true
+  add_index :presences, %i[user_id session_id], unique: true
   add_index :presences, :user_id
   add_index :presences, :last_heartbeat
 end

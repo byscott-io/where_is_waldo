@@ -54,7 +54,9 @@ module WhereIsWaldo
         false
       end
 
+      # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+        # rubocop:enable Metrics/ParameterLists, Layout/LineLength
         data = get_presence_data(subject_id, session_id)
         return false unless data
 

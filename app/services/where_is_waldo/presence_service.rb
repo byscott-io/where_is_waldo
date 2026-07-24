@@ -37,7 +37,9 @@ module WhereIsWaldo
       # @param last_activity_at [Integer] Unix timestamp (ms) of last user activity
       # @param metadata [Hash] Additional data to merge
       # @return [Boolean] success
+      # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+        # rubocop:enable Metrics/ParameterLists, Layout/LineLength
         adapter.heartbeat(
           session_id: session_id,
           subject_id: subject_id,

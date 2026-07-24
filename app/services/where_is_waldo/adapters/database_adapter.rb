@@ -33,9 +33,7 @@ module WhereIsWaldo
       end
 
       def disconnect(session_id: nil, subject_id: nil)
-        if session_id
-          raise ArgumentError, "disconnect(session_id:) requires subject_id:" unless subject_id
-        end
+        raise ArgumentError, "disconnect(session_id:) requires subject_id:" if session_id && !subject_id
 
         scope = build_lookup_scope(session_id: session_id, subject_id: subject_id)
         scope.delete_all
@@ -47,7 +45,9 @@ module WhereIsWaldo
         false
       end
 
+      # rubocop:disable Metrics/ParameterLists, Layout/LineLength
       def heartbeat(session_id:, subject_id:, tab_visible: true, subject_active: true, last_activity_at: nil, metadata: {})
+        # rubocop:enable Metrics/ParameterLists, Layout/LineLength
         now = Time.current
         updates = {
           last_heartbeat: now,
