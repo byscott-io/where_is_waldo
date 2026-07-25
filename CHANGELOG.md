@@ -3,6 +3,28 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.6
+
+### Security
+
+- **The built-in connection no longer authenticates from client-supplied
+  `subject_id` in production.** `WhereIsWaldo::ApplicationCable::Connection`
+  previously fell back to `request.params[:subject_id]` whenever no
+  `authenticate_proc` was configured — so a client could connect with
+  `?subject_id=<anyone>` and be authenticated as that subject (cross-account
+  impersonation). The params path is now permitted **only in local dev/test**;
+  production **fails closed** (rejects the connection) unless `authenticate_proc`
+  (or a self-identified connection such as `JwtConnection`) establishes the
+  subject. Apps that mount the built-in connection in production without an
+  `authenticate_proc` will now be rejected — configure one.
+
+### Tests
+
+- Added a two-account roster isolation spec (a viewer streams only their own
+  org's stream, sees only their own members, and receives none of another
+  account's deltas) and a connection spec proving the params-fallback path
+  fails closed in production.
+
 ## 0.1.5
 
 ### Security / correctness
