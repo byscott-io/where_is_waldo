@@ -15,7 +15,8 @@ require "rails_helper"
 # exercise the connection-layer `request.params[:subject_id]` fallback (see
 # application_cable/connection.rb) — closing that spoofing path is a separate,
 # versioned code change.
-RSpec.describe WhereIsWaldo::RosterChannel, "cross-account isolation", type: :channel do
+RSpec.describe WhereIsWaldo::RosterChannel, type: :channel do
+  # Cross-account (multi-tenant) isolation — see file header.
   let(:alice) { create(:user, name: "Alice") } # account A
   let(:bob)   { create(:user, name: "Bob") }   # account B
 
