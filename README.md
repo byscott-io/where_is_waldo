@@ -2,6 +2,11 @@
 
 Real-time presence tracking for Rails + React using ActionCable.
 
+[![CI](https://github.com/byscott-io/where_is_waldo/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/byscott-io/where_is_waldo/actions/workflows/ci.yml)
+[![Gem Version](https://img.shields.io/gem/v/where_is_waldo)](https://rubygems.org/gems/where_is_waldo)
+[![npm version](https://img.shields.io/npm/v/@byscott-io/where-is-waldo)](https://www.npmjs.com/package/@byscott-io/where-is-waldo)
+[![License](https://img.shields.io/github/license/byscott-io/where_is_waldo)](LICENSE)
+
 ## Features
 
 - **Presence tracking** - know who's online
