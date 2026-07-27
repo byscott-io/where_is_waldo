@@ -165,6 +165,20 @@ RSpec.describe WhereIsWaldo::Adapters::RedisAdapter do
         :subject_active
       )
     end
+
+    # Contract Roster#aggregate depends on: it normalizes with
+    #   last.respond_to?(:iso8601) ? last.iso8601 : last
+    # so the Redis adapter MUST emit last_activity as a Time-shaped value
+    # (not a String / epoch Integer), else the roster payload ships the wrong
+    # type to consumers. Roster's own Redis spec stubs this shape; this pins it
+    # against the real adapter so the two can't silently drift.
+    it "emits last_activity as a Time-shaped value (responds to #iso8601, not a String)" do
+      last = adapter.sessions_for_subject(user.id).first[:last_activity]
+
+      expect(last).not_to be_a(String)
+      expect(last).to respond_to(:iso8601)
+      expect { Time.iso8601(last.iso8601) }.not_to raise_error
+    end
   end
 
   describe "#sessions_for_subjects" do # rubocop:disable RSpec/MultipleMemoizedHelpers

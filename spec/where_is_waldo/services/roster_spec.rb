@@ -65,6 +65,24 @@ RSpec.describe WhereIsWaldo::Roster do
         expect(described_class.state_for(user.id)[:last_activity]).to be_nil
       end
 
+      # Upgrade window: after the migration adds last_activity, pre-existing live
+      # rows are NULL until their next connect/active-heartbeat. A subject can
+      # then have mixed sessions (one migrated, one legacy-nil). aggregate uses
+      # filter_map before .max — WITHOUT it, [String, nil].max raises
+      # "comparison of String with nil failed" (a 500 on the roster snapshot).
+      # Real DB rows, no stub: one session with a nil last_activity column.
+      it "ignores nil-last_activity sessions and returns the max of the rest (no crash)" do
+        user = create(:user)
+        session(user, tab_visible: true, subject_active: true, platform: "web",
+                      last_activity: nil) # legacy row: column added, not yet backfilled
+        session(user, tab_visible: true, subject_active: true, platform: "mobile",
+                      last_activity: 20.seconds.ago)
+
+        result = nil
+        expect { result = described_class.state_for(user.id)[:last_activity] }.not_to raise_error
+        expect(Time.iso8601(result)).to be_within(2.seconds).of(20.seconds.ago)
+      end
+
       it "normalizes to an ISO8601 string regardless of adapter shape" do
         user = create(:user)
         redis_time = Time.zone.parse("2026-07-27T15:00:00Z")
@@ -113,7 +131,10 @@ RSpec.describe WhereIsWaldo::Roster do
         expect(ana[:name]).to eq("Ana") # subject_data merged in
         expect(ana[:status]).to eq("active")
         expect(ana[:devices]).to eq("web" => "active")
-        expect(ana[:last_activity]).to match(/\AZ|\A\d{4}-\d{2}-\d{2}T/) # ISO8601 string
+        # Real presence row (last_activity: Time.current) through the real DB
+        # adapter — no stub. Time.iso8601 proves it parses; be_within proves it
+        # is the actual timestamp, not a malformed/frozen string.
+        expect(Time.iso8601(ana[:last_activity])).to be_within(5.seconds).of(Time.current)
 
         bo = snap.find { |m| m[:id] == bg_user.id }
         expect(bo[:status]).to eq("background")
