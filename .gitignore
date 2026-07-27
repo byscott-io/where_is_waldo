@@ -35,3 +35,6 @@ coverage/
 # Yarn
 .yarn-integrity
 yarn-error.log
+
+# RSpec example-status persistence (per-machine run artifact)
+spec/examples.txt
