@@ -3,6 +3,39 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.7
+
+### Added
+
+- **`last_activity` in roster member payloads.** Each member in a
+  `roster_snapshot` / `roster_delta` message now carries a `last_activity`
+  ISO8601 timestamp — the most recent `subject_active: true` heartbeat time
+  across all of the subject's live sessions (web, mobile, whichever). `nil`
+  when the subject has no live sessions. Lets hosts derive "seconds idle"
+  client-side (`Date.now() - new Date(last_activity)`) and apply their own
+  thresholds instead of being tied to the gem's active↔idle boundary.
+
+  Example: a picker that wants "stay green until 3 minutes without input"
+  no longer needs a server-side `activityTimeout` override — it reads
+  `member.last_activity` and thresholds against its own clock. The
+  server's own active/idle enum still ships in `status` for consumers who
+  do want it, and the roster still broadcasts only on transitions (no
+  extra bandwidth beyond the added field).
+
+  Payload shape:
+  ```json
+  { "id": 7, "status": "idle",
+    "devices": { "web": "idle", "mobile": "active" },
+    "last_activity": "2026-07-27T15:23:04Z",
+    "name": "Alan Smith" }
+  ```
+
+  Both adapters were already tracking `last_activity` per session — this
+  release plumbs it through the roster aggregation (max across sessions)
+  and normalizes to an ISO string in the broadcast payload, absorbing the
+  DB-adapter-returns-string / Redis-adapter-returns-Time mismatch at the
+  roster boundary.
+
 ## 0.1.6
 
 ### Security
