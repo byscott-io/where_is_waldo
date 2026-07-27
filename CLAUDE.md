@@ -102,6 +102,38 @@ Single VERSION file at root. Both gem (version.rb) and npm (package.json) use it
 rake version:bump[0.0.2]  # Updates both
 ```
 
+## Release Process
+
+**Publishes are immutable and one path renders docs — so update EVERYTHING
+first, publish last.** npmjs.com renders the README from the published tarball
+and only refreshes it on the *next* version, so a README that lags the code
+stays stale on npm until the following release. rubygems.org does NOT render the
+README (it shows `spec.summary`/`spec.description` + the metadata links), but the
+gem still bundles it. Get docs right *before* you build/publish.
+
+Do these **in order**; do not build or publish until steps 1–5 are committed:
+
+1. **Bump version** — `rake version:bump[X.Y.Z]` (updates VERSION → gem +
+   package.json). Confirm VERSION, `package.json`, and `Gemfile.lock`
+   (`where_is_waldo (X.Y.Z)`) all match; run `bundle install` if the lock lags.
+2. **CHANGELOG.md** — add the `## X.Y.Z` entry.
+3. **README.md** — update for any API / roster-payload / config change. This is
+   the one people read (GitHub + npm) — must be final before npm publish.
+4. **Other docs** — `docs/*.md` (e.g. `PRESENCE_ROSTER_PLAN.md`) if the change
+   touches them.
+5. **Green + commit** — `bundle exec rspec`, `bundle exec rubocop`, `yarn build`
+   (+ JS tests) all pass; commit steps 1–4 to master.
+6. **Build the gem** — `bundle exec rake build` → `pkg/where_is_waldo-X.Y.Z.gem`.
+   Use `rake build`, NOT `gem build` (which drops it at the repo root and breaks
+   Scott's `gem push pkg/...` command).
+7. **Publish npm** — `yarn install && yarn build && npm publish` (public,
+   `@byscott-io/where-is-waldo`). README is now final, so npm renders it right.
+8. **Tag** — `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`.
+9. **Gem push is Scott's** — hand him `pkg/where_is_waldo-X.Y.Z.gem`; he runs
+   `GEM_HOST_API_KEY="$RUBYGEMS_TOKEN" gem push pkg/where_is_waldo-X.Y.Z.gem`.
+10. **Verify live** — `gem list -r where_is_waldo` and
+    `npm view @byscott-io/where-is-waldo version` both show X.Y.Z.
+
 ## Adapters
 
 - **DatabaseAdapter**: Uses ActiveRecord, requires cleanup job
