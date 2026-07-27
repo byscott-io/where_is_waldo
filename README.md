@@ -238,7 +238,8 @@ See `docs/PRESENCE_ROSTER_PLAN.md` for the full mode matrix and tradeoffs.
 their live sessions (multiple browser tabs, mobile, etc.):
 
 ```
-{ id: 7, status: "active", devices: { web: "idle", mobile: "active" } }
+{ id: 7, status: "active", devices: { web: "idle", mobile: "active" },
+  last_activity: "2026-07-27T15:23:04Z" }
 ```
 
 - `status` — highest activity across devices (the "active anywhere?" answer):
@@ -248,6 +249,11 @@ their live sessions (multiple browser tabs, mobile, etc.):
   - `offline` — no live sessions
 - `devices[platform]` — that platform's own status (answers "active on
   **mobile**?" vs. "active at all?").
+- `last_activity` — ISO8601 timestamp of the most recent input across **all**
+  the subject's live sessions (`null` when offline). The roster only
+  broadcasts on `status` transitions, so subtract against your own clock to
+  derive seconds-idle and apply client-side thresholds without a server
+  `timeout` change: `(Date.now() - new Date(m.last_activity)) / 1000`.
 
 #### Configure
 
