@@ -8,12 +8,18 @@ module WhereIsWaldo
   #
   # A member's presence is reported per device AND as an overall roll-up:
   #
-  #   { id: 7, status: "active", devices: { "web" => "active", "mobile" => "idle" } }
+  #   { id: 7, status: "active",
+  #     devices: { "web" => "active", "mobile" => "idle" },
+  #     last_activity: "2026-07-27T15:23:04Z" }
   #
   # `devices[platform]` is that platform's own aggregate status (several browser
   # tabs roll up into one "web" status); `status` is the highest level across
   # all platforms — the "is the user active anywhere?" answer, while
-  # `devices["mobile"]` answers "is the user active on mobile?". Each status is:
+  # `devices["mobile"]` answers "is the user active on mobile?". `last_activity`
+  # is the most recent input timestamp across all of the subject's live sessions
+  # (nil when offline), letting the client subtract from its own clock to derive
+  # seconds-idle and apply its own thresholds without new broadcasts. Each
+  # status is:
   #
   #   active      - a live session on that device is tab-visible AND working
   #   idle        - a live session is tab-visible but not actively using
@@ -182,15 +188,21 @@ module WhereIsWaldo
       # Reduce a subject's live sessions to per-device statuses plus an overall
       # roll-up. Sessions are grouped by platform (so several browser tabs form
       # one "web" status); the overall status is the highest across platforms.
+      # `last_activity` is the max across all sessions (any platform), so it
+      # answers "when did any of this subject's tabs last see input?".
       # @param sessions [Array<Hash>] presence hashes from the adapter
-      # @return [Hash] { status: "active", devices: { "web" => "active", ... } }
+      # @return [Hash] { status:, devices:, last_activity: }
       def aggregate(sessions)
         devices = sessions.group_by { |s| platform(s) }
                           .transform_values { |sess| platform_level(sess) }
         overall = devices.values.max_by { |level| RANK[level] } || :offline
+        # DB adapter returns last_activity as ISO string, Redis as Time; both sort
+        # correctly among themselves. Normalize to ISO string in the payload.
+        last = sessions.filter_map { |s| s[:last_activity] }.max
         {
           status: overall.to_s,
-          devices: devices.transform_values(&:to_s)
+          devices: devices.transform_values(&:to_s),
+          last_activity: last.respond_to?(:iso8601) ? last.iso8601 : last
         }
       end
 
@@ -229,12 +241,13 @@ module WhereIsWaldo
         data.merge(
           id: id || record&.id,
           status: state[:status],
-          devices: state[:devices]
+          devices: state[:devices],
+          last_activity: state[:last_activity]
         )
       end
 
       def offline_state
-        { status: "offline", devices: {} }
+        { status: "offline", devices: {}, last_activity: nil }
       end
 
       def find_subject(subject_id)

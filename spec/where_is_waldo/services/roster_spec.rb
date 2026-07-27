@@ -13,9 +13,9 @@ RSpec.describe WhereIsWaldo::Roster do
   end
 
   # Build a live session for a user.
-  def session(user, tab_visible:, subject_active:, platform: "web")
-    create(:presence, subject: user, tab_visible: tab_visible,
-                      subject_active: subject_active, metadata: { "platform" => platform })
+  def session(user, tab_visible:, subject_active:, platform: "web", last_activity: Time.current)
+    create(:presence, subject: user, tab_visible: tab_visible, subject_active: subject_active,
+                      last_activity: last_activity, metadata: { "platform" => platform })
   end
 
   describe ".state_for" do
@@ -37,11 +37,63 @@ RSpec.describe WhereIsWaldo::Roster do
       expect(described_class.state_for(user.id)[:status]).to eq("background")
     end
 
-    it "reports offline (no devices) when no session is within the timeout" do
+    it "reports offline (no devices, no last_activity) when no session is within the timeout" do
       user = create(:user)
       create(:presence, :stale, subject: user)
 
-      expect(described_class.state_for(user.id)).to eq(status: "offline", devices: {})
+      expect(described_class.state_for(user.id)).to eq(status: "offline", devices: {}, last_activity: nil)
+    end
+
+    # last_activity in the payload lets the client subtract from Date.now() and
+    # derive seconds-idle at any time — hosts can apply their own thresholds
+    # without needing the gem to broadcast on every heartbeat.
+    describe "last_activity" do
+      it "is the max last_activity across all of the subject's live sessions (ISO8601)" do
+        user = create(:user)
+        session(user, tab_visible: true, subject_active: true, platform: "web",
+                      last_activity: 3.minutes.ago)
+        session(user, tab_visible: true, subject_active: false, platform: "mobile",
+                      last_activity: 30.seconds.ago)
+
+        result = described_class.state_for(user.id)[:last_activity]
+
+        expect(Time.iso8601(result)).to be_within(2.seconds).of(30.seconds.ago)
+      end
+
+      it "is nil when the subject has no live sessions" do
+        user = create(:user)
+        expect(described_class.state_for(user.id)[:last_activity]).to be_nil
+      end
+
+      # Upgrade window: after the migration adds last_activity, pre-existing live
+      # rows are NULL until their next connect/active-heartbeat. A subject can
+      # then have mixed sessions (one migrated, one legacy-nil). aggregate uses
+      # filter_map before .max — WITHOUT it, [String, nil].max raises
+      # "comparison of String with nil failed" (a 500 on the roster snapshot).
+      # Real DB rows, no stub: one session with a nil last_activity column.
+      it "ignores nil-last_activity sessions and returns the max of the rest (no crash)" do
+        user = create(:user)
+        session(user, tab_visible: true, subject_active: true, platform: "web",
+                      last_activity: nil) # legacy row: column added, not yet backfilled
+        session(user, tab_visible: true, subject_active: true, platform: "mobile",
+                      last_activity: 20.seconds.ago)
+
+        result = nil
+        expect { result = described_class.state_for(user.id)[:last_activity] }.not_to raise_error
+        expect(Time.iso8601(result)).to be_within(2.seconds).of(20.seconds.ago)
+      end
+
+      it "normalizes to an ISO8601 string regardless of adapter shape" do
+        user = create(:user)
+        redis_time = Time.zone.parse("2026-07-27T15:00:00Z")
+        allow(WhereIsWaldo::PresenceService).to receive(:sessions_for_subjects).and_return(
+          user.id => [{ session_id: "s1", subject_id: user.id, tab_visible: true,
+                        subject_active: true, last_activity: redis_time,
+                        metadata: { "platform" => "web" } }]
+        )
+
+        expect(described_class.state_for(user.id)[:last_activity]).to eq("2026-07-27T15:00:00Z")
+      end
     end
   end
 
@@ -79,6 +131,10 @@ RSpec.describe WhereIsWaldo::Roster do
         expect(ana[:name]).to eq("Ana") # subject_data merged in
         expect(ana[:status]).to eq("active")
         expect(ana[:devices]).to eq("web" => "active")
+        # Real presence row (last_activity: Time.current) through the real DB
+        # adapter — no stub. Time.iso8601 proves it parses; be_within proves it
+        # is the actual timestamp, not a malformed/frozen string.
+        expect(Time.iso8601(ana[:last_activity])).to be_within(5.seconds).of(Time.current)
 
         bo = snap.find { |m| m[:id] == bg_user.id }
         expect(bo[:status]).to eq("background")
@@ -86,6 +142,7 @@ RSpec.describe WhereIsWaldo::Roster do
         cy = snap.find { |m| m[:id] == offline_user.id }
         expect(cy[:status]).to eq("offline")
         expect(cy[:devices]).to eq({})
+        expect(cy[:last_activity]).to be_nil
       end
     end
   end
@@ -157,11 +214,13 @@ RSpec.describe WhereIsWaldo::Roster do
 
       expect(described_class.state_for(user_a.id)).to eq(
         status: "active",
-        devices: { "web" => "active", "mobile" => "idle" }
+        devices: { "web" => "active", "mobile" => "idle" },
+        last_activity: nil
       )
       expect(described_class.state_for(user_b.id)).to eq(
         status: "background",
-        devices: { "web" => "background" }
+        devices: { "web" => "background" },
+        last_activity: nil
       )
     end
 
@@ -191,7 +250,8 @@ RSpec.describe WhereIsWaldo::Roster do
 
       expect(described_class.state_for(user_a.id)).to eq(
         status: "active",
-        devices: { "web" => "active" }
+        devices: { "web" => "active" },
+        last_activity: nil
       )
     end
   end
