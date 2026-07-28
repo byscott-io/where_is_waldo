@@ -55,11 +55,25 @@ module WhereIsWaldo
       PresenceService.all_online_ids(timeout: timeout)
     end
 
-    delegate :subject_online?, to: :PresenceService
+    # NOTE: don't use ActiveSupport's `delegate` here. `delegate` generates
+    # the method via `class_eval` with a STRING, and a string-eval'd body's
+    # `Module.nesting` is just the target class — for a `class << self` inside
+    # `module WhereIsWaldo`, that's `[#<Class:WhereIsWaldo>]`, WITHOUT
+    # `WhereIsWaldo` itself. Constant lookup for `PresenceService` inside the
+    # generated method then can't walk up to the enclosing module and raises
+    # `uninitialized constant #<Class:WhereIsWaldo>::PresenceService`. A plain
+    # `def` inherits the enclosing lexical nesting and resolves correctly.
+    def subject_online?(...)
+      PresenceService.subject_online?(...)
+    end
 
-    delegate :sessions_for_subject, to: :PresenceService
+    def sessions_for_subject(...)
+      PresenceService.sessions_for_subject(...)
+    end
 
-    delegate :session_status, to: :PresenceService
+    def session_status(...)
+      PresenceService.session_status(...)
+    end
 
     def cleanup(timeout: nil)
       PresenceService.cleanup(timeout: timeout)
