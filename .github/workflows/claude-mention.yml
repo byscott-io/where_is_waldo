@@ -1,0 +1,15 @@
+# Thin caller — @claude mentions delegate to the centralized reusable workflow.
+name: Claude Mention
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    uses: byscott-io/infrabyscott/.github/workflows/claude-mention.yml@master
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
