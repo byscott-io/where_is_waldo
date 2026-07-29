@@ -7,13 +7,10 @@ on:
   pull_request_review_comment:
     types: [created]
 
-# Required: reusable workflows can't exceed the caller's token, and the repo
-# default is read-only. Grant here what the reusable needs.
+# No write permissions declared — the enterprise forbids it and rejects the run.
+# Writes flow through CLAUDE_GH_TOKEN (a PAT) inside the reusable workflow.
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
+  contents: read
 
 jobs:
   claude:
@@ -21,3 +18,4 @@ jobs:
     uses: byscott-io/infrabyscott/.github/workflows/claude-mention.yml@master
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_GH_TOKEN: ${{ secrets.CLAUDE_GH_TOKEN }}
