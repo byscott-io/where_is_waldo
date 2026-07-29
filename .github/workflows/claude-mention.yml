@@ -1,4 +1,5 @@
-# Thin caller — @claude mentions delegate to the centralized reusable workflow.
+# TEMP: self-contained (no reusable) to isolate whether the enterprise blocks
+# cross-repo reusable-workflow calls. Revert to the infra caller once known.
 name: Claude Mention
 
 on:
@@ -7,15 +8,18 @@ on:
   pull_request_review_comment:
     types: [created]
 
-# No write permissions declared — the enterprise forbids it and rejects the run.
-# Writes flow through CLAUDE_GH_TOKEN (a PAT) inside the reusable workflow.
 permissions:
   contents: read
 
 jobs:
   claude:
     if: contains(github.event.comment.body, '@claude')
-    uses: byscott-io/infrabyscott/.github/workflows/claude-mention.yml@master
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_GH_TOKEN: ${{ secrets.CLAUDE_GH_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.CLAUDE_GH_TOKEN }}
