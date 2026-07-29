@@ -1,0 +1,14 @@
+# Thin caller — delegates to the centralized reusable workflow in infrabyscott.
+# All review logic (prompt, skip rules, action config) lives there; edit it in
+# infra to change behavior fleet-wide. Do not add logic here.
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+jobs:
+  review:
+    uses: byscott-io/infrabyscott/.github/workflows/claude-pr-review.yml@master
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
