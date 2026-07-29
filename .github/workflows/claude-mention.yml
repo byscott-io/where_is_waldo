@@ -7,6 +7,14 @@ on:
   pull_request_review_comment:
     types: [created]
 
+# Required: reusable workflows can't exceed the caller's token, and the repo
+# default is read-only. Grant here what the reusable needs.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
 jobs:
   claude:
     if: contains(github.event.comment.body, '@claude')

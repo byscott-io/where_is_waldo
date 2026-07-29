@@ -7,6 +7,13 @@ on:
   pull_request:
     types: [opened, ready_for_review]
 
+# Required: reusable workflows can't exceed the caller's token, and the repo
+# default is read-only. Grant here what the reusable needs.
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
 jobs:
   review:
     uses: byscott-io/infrabyscott/.github/workflows/claude-pr-review.yml@master
