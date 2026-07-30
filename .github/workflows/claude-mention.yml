@@ -16,4 +16,5 @@ jobs:
     uses: byscott-io/workflows/.github/workflows/claude-mention.yml@master
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CLAUDE_GH_TOKEN: ${{ secrets.CLAUDE_GH_TOKEN }}
+      CLAUDE_APP_ID: ${{ secrets.CLAUDE_APP_ID }}
+      CLAUDE_APP_PRIVATE_KEY: ${{ secrets.CLAUDE_APP_PRIVATE_KEY }}
