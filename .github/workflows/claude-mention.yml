@@ -1,5 +1,4 @@
-# TEMP: self-contained (no reusable) to isolate whether the enterprise blocks
-# cross-repo reusable-workflow calls. Revert to the infra caller once known.
+# Thin caller — @claude mentions delegate to the centralized public reusable.
 name: Claude Mention
 
 on:
@@ -14,12 +13,7 @@ permissions:
 jobs:
   claude:
     if: contains(github.event.comment.body, '@claude')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.CLAUDE_GH_TOKEN }}
+    uses: byscott-io/workflows/.github/workflows/claude-mention.yml@master
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_GH_TOKEN: ${{ secrets.CLAUDE_GH_TOKEN }}
