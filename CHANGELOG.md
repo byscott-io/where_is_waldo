@@ -3,6 +3,41 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.8
+
+### Fixed
+
+- **`WhereIsWaldo.subject_online?`, `.sessions_for_subject`, `.session_status`
+  no longer raise `uninitialized constant` when called.** These three methods
+  were defined with ActiveSupport's `delegate :method, to: :PresenceService`
+  inside a `class << self` block. `delegate` generates the method body via
+  `class_eval` with a **string**, and a string-eval'd body's `Module.nesting`
+  is just the target class — for the WhereIsWaldo module's singleton class,
+  that's `[#<Class:WhereIsWaldo>]`, *without* the enclosing `WhereIsWaldo`.
+  Constant lookup for `PresenceService` inside the generated method then
+  couldn't walk up to the enclosing module and failed with:
+
+  ```
+  uninitialized constant #<Class:WhereIsWaldo>::PresenceService (NameError)
+  ```
+
+  Replaced the three `delegate` calls with plain `def` methods matching the
+  pattern of the other class methods on the module (`.connect`, `.online`,
+  `.online_ids`, `.cleanup`, etc.), which inherit the correct lexical scope
+  and resolve `PresenceService` as `WhereIsWaldo::PresenceService`.
+
+  Waldo's own internal code (`PresenceChannel`, `Roster`) references
+  `PresenceService` at its fully-qualified name from correctly-scoped
+  modules, so this bug never affected the actual presence flow — only host
+  code that calls the top-level convenience wrappers. Affects every
+  released version up to and including `0.1.7`.
+
+### Tests
+
+- Added `spec/where_is_waldo_spec.rb` exercising every top-level convenience
+  method at the public boundary — the only place a `class_eval`-scope
+  regression in the wrapper can be caught, since internal callers bypass it.
+
 ## 0.1.7
 
 ### Added
