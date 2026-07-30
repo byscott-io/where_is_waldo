@@ -486,3 +486,5 @@ gem guarantees, and what your app must do:
 ## License
 
 MIT
+
+<!-- claude auto-review pilot test d8d3f96 -->
