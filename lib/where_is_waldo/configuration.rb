@@ -27,6 +27,15 @@ module WhereIsWaldo
     # :heartbeat_interval - expected heartbeat frequency (default: 30)
     attr_accessor :timeout, :heartbeat_interval
 
+    # Observability
+    # :ignore_heartbeat_apm - when true (default) and a supported APM agent
+    #   (New Relic) is loaded in the host app, presence heartbeats are kept out
+    #   of APM as their own transactions. Heartbeats are the highest-volume,
+    #   least-interesting cable action, so reporting each one distorts
+    #   throughput and average response time without adding signal. Set false
+    #   to report them like any other action. See WhereIsWaldo::Apm.
+    attr_accessor :ignore_heartbeat_apm
+
     # ActionCable settings
     # :channel_name - defaults to 'WhereIsWaldo::PresenceChannel'
     # :authenticate_proc - proc to authenticate connection, receives request
@@ -119,6 +128,9 @@ module WhereIsWaldo
       # Timing defaults
       @timeout = 90
       @heartbeat_interval = 30
+
+      # Observability defaults
+      @ignore_heartbeat_apm = true
 
       # ActionCable defaults
       @channel_name = "WhereIsWaldo::PresenceChannel"

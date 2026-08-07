@@ -2,6 +2,7 @@
 
 require "where_is_waldo/version"
 require "where_is_waldo/configuration"
+require "where_is_waldo/apm"
 require "where_is_waldo/engine" if defined?(Rails)
 
 module WhereIsWaldo

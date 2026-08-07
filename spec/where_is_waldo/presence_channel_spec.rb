@@ -60,6 +60,46 @@ RSpec.describe WhereIsWaldo::PresenceChannel, type: :channel do
     end
   end
 
+  describe "#heartbeat APM integration" do
+    before { subscribe }
+
+    it "routes the heartbeat through the APM ignore wrapper" do
+      allow(WhereIsWaldo::Apm).to receive(:ignoring_transaction).and_call_original
+
+      perform :heartbeat, { tab_visible: true, subject_active: true }
+
+      expect(WhereIsWaldo::Apm).to have_received(:ignoring_transaction)
+    end
+
+    it "still records the heartbeat while wrapped (the wrapper must not swallow the work)" do
+      allow(WhereIsWaldo::Apm).to receive(:ignoring_transaction).and_call_original
+
+      freeze_time do
+        travel 1.minute
+        perform :heartbeat, { tab_visible: true, subject_active: false }
+
+        presence = WhereIsWaldo::Presence.last.reload
+        expect(presence.last_heartbeat).to eq(Time.current)
+        expect(presence.subject_active).to be(false)
+      end
+    end
+  end
+
+  describe "action surface" do
+    # perform_heartbeat holds the real work and MUST stay private: ActionCable
+    # treats every public instance method as a client-callable action
+    # (processable_action? checks self.class.action_methods), so a public helper
+    # would let a client invoke it directly, bypassing the heartbeat wrapper.
+    it "exposes heartbeat as a client-callable action" do
+      expect(described_class.action_methods).to include("heartbeat")
+    end
+
+    it "keeps perform_heartbeat off the action surface" do
+      expect(described_class.action_methods).not_to include("perform_heartbeat")
+      expect(described_class.private_instance_methods).to include(:perform_heartbeat)
+    end
+  end
+
   describe "suppress_presence_proc" do
     context "when the proc returns truthy" do
       before do

@@ -32,7 +32,20 @@ module WhereIsWaldo
       publish_roster_change
     end
 
+    # Kept out of APM as its own transaction by default — heartbeats are the
+    # highest-volume, least-interesting cable action, so reporting each one
+    # distorts throughput and average response time without adding signal. The
+    # wrapper no-ops unless the host runs a supported agent; see
+    # WhereIsWaldo::Apm and config.ignore_heartbeat_apm. The real work lives in
+    # perform_heartbeat, which is private so a client can't invoke it directly
+    # as a channel action (only public methods are processable actions).
     def heartbeat(data)
+      WhereIsWaldo::Apm.ignoring_transaction { perform_heartbeat(data) }
+    end
+
+    private
+
+    def perform_heartbeat(data)
       return if presence_suppressed?
 
       data = data.with_indifferent_access
@@ -57,8 +70,6 @@ module WhereIsWaldo
       @wiw_subject_active = subject_active
       publish_roster_change
     end
-
-    private
 
     # Memoized per-subscription. Host apps configure suppress_presence_proc
     # to gate WHICH subscriptions register presence — e.g. a support-user
