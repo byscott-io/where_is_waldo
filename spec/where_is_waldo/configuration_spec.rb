@@ -29,6 +29,10 @@ RSpec.describe WhereIsWaldo::Configuration do
     it "sets heartbeat_interval to 30" do
       expect(config.heartbeat_interval).to eq(30)
     end
+
+    it "enables ignore_heartbeat_apm by default" do
+      expect(config.ignore_heartbeat_apm).to be(true)
+    end
   end
 
   describe "#subject_class_constant" do

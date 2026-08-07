@@ -113,6 +113,14 @@ WhereIsWaldo.configure do |config|
   config.timeout = 90                   # seconds until offline
   config.heartbeat_interval = 30
 
+  # Observability: when true (default) and the host app runs a supported APM
+  # agent (New Relic today), presence heartbeats are kept out of APM as their
+  # own transactions. Heartbeats are the highest-volume, least-interesting cable
+  # action, so reporting each one inflates throughput and flatters average
+  # response time without adding signal. Failures are still reported. Set false
+  # to report heartbeats like any other action.
+  config.ignore_heartbeat_apm = true
+
   # Optional: custom subject data in presence hash. NOTE: with the roster
   # enabled, these fields are broadcast to every member of the org — see
   # Security.

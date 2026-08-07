@@ -3,6 +3,38 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.9
+
+### Added
+
+- **Presence heartbeats are kept out of APM as their own transactions.**
+  `WhereIsWaldo::PresenceChannel#heartbeat` now runs inside
+  `WhereIsWaldo::Apm.ignoring_transaction`, so when a host app runs New Relic
+  the per-tab-per-interval heartbeat — the highest-volume, least-interesting
+  cable action — no longer surfaces as an APM transaction. Left unhandled it
+  inflates throughput and flatters average response time (heartbeats are
+  uniformly fast) while telling operators nothing the presence store can't
+  already answer.
+
+  - Guarded, no new dependency: `Apm` no-ops unless a supported agent
+    (New Relic today) is loaded, so consumers without APM pay nothing.
+  - Failures stay visible: an ignored New Relic transaction skips `commit!`,
+    where exceptions are normally harvested, so the wrapper hands any heartbeat
+    exception straight to the error collector and re-raises. Ignoring the
+    routine transaction never hides a heartbeat failure.
+  - Opt out with `config.ignore_heartbeat_apm = false` to report heartbeats
+    like any other action.
+  - Scope: New Relic only. The underlying exposure is agent-general — any APM
+    that opens a transaction per `perform_action` sees the same heartbeat
+    volume — but New Relic is the only agent seen in production so far.
+    Detection is isolated in `Apm.agent` so another vendor can be added there
+    without touching callers.
+
+  Note: the companion New Relic issue — the agent pinning the WebSocket upgrade
+  transaction onto pooled ActionCable worker threads — is a general
+  newrelic_rpm × ActionCable defect and stays a host-app shim; it is not
+  something the gem patches.
+
 ## 0.1.8
 
 ### Fixed
