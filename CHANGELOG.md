@@ -3,6 +3,21 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.1.9
+
+Security/maintenance release — dependency bumps only, no library code changes.
+
+### Security
+
+- **Rails 8.1.3.1** — fixes the ActiveStorage RCE (CVE-2026-66066).
+- **sqlite3 2.9.5** — fixes two use-after-free issues.
+
+### Changed
+
+- Bumped transitive/build dependencies: `undici` 7.28.0 → 7.29.0,
+  `rollup` 4.62.2 → 4.62.4, `js-yaml` → 4.3.1 and `postcss` → 8.5.26
+  (via resolutions).
+
 ## 0.1.8
 
 ### Fixed
