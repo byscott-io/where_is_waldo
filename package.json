@@ -14,8 +14,8 @@
     "build": "rollup -c",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .js,.jsx",
-    "lint:fix": "eslint src --ext .js,.jsx --fix",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
     "prepublishOnly": "npm run build",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
@@ -29,6 +29,7 @@
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@byscott-io/eslint-config": "^0.1.0",
     "@rails/actioncable": "^8.1.301",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
@@ -36,9 +37,7 @@
     "@testing-library/react": "^16.3.2",
     "cypress": "^15.21.0",
     "esbuild": "^0.28.2",
-    "eslint": "^8.50.0",
-    "eslint-plugin-react": "^7.33.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint": "^10.9.1",
     "jsdom": "^30.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -71,7 +70,6 @@
   },
   "resolutions": {
     "axios": "^1.18.0",
-    "eslint/**/brace-expansion": "^1.1.16",
     "js-yaml": "^4.3.1",
     "postcss": "^8.5.26",
     "qs": "^6.15.2",
