@@ -74,6 +74,7 @@
     "postcss": "^8.5.26",
     "qs": "^6.15.2",
     "undici": "^7.29.0",
-    "systeminformation": "^5.31.17"
+    "systeminformation": "^5.31.17",
+    "browserslist": "^4.28.9"
   }
 }
