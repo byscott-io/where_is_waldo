@@ -298,6 +298,7 @@ PLATFORMS
 DEPENDENCIES
   database_cleaner-active_record (~> 2.0)
   factory_bot_rails (~> 6.0)
+  json (< 3)
   mock_redis (~> 0.36)
   puma (>= 7.2.1)
   rake
