@@ -18,6 +18,21 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      dev-tooling:
+        patterns:
+          - "rubocop"
+          - "rubocop-*"
+          - "lefthook"
+          - "rspec-rails"
+          - "faker"
+          - "factory_bot_rails"
+          - "shoulda-matchers"
+          - "brakeman"
+          - "bundler-audit"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: npm
     directory: "/"
     cooldown:
@@ -27,6 +42,25 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      dev-tooling:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+          - "prettier"
+          - "vitest"
+          - "@vitest/*"
+          - "jest"
+          - "@testing-library/*"
+          - "postcss"
+          - "postcss-*"
+          - "sass"
+          - "typescript"
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: github-actions
     directory: "/"
     cooldown:
@@ -34,3 +68,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
