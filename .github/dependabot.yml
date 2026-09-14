@@ -40,7 +40,7 @@ updates:
     # guard has to live here too. Drop this once a Rails release carries the fix.
     ignore:
       - dependency-name: "json"
-        update-types: ["version-update:semver-major"]
+        versions: [">= 3.a"]
   - package-ecosystem: npm
     directory: "/"
     cooldown:
