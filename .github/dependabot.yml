@@ -33,6 +33,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # json 3 removed JSON.parse's positional options, which
+    # ActiveSupport::JSON.decode still passes - every ActiveRecord json column
+    # raises on deserialize. Fixed in rails/rails#58601 but not in any release
+    # yet. Dependabot rewrites the Gemfile pin rather than respecting it, so the
+    # guard has to live here too. Drop this once a Rails release carries the fix.
+    ignore:
+      - dependency-name: "json"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: "/"
     cooldown:
