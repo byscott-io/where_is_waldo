@@ -1,4 +1,6 @@
 version: 2
+# GitHub Packages reads use a repository-scoped, read-only packages token.
+# It needs no repo or write access - keep it to read:packages only.
 registries:
   github-gems:
     type: rubygems-server
