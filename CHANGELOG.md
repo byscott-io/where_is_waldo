@@ -3,6 +3,32 @@
 Notable changes to where_is_waldo. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+
+- **The Redis adapter is now tested against a real server, on both redis-rb 5
+  and 6.** Its existing spec runs against `MockRedis`, a pure-Ruby fake with no
+  protocol layer, so it could not see wire-format changes at all. redis-rb 6
+  defaults to RESP3, which types several replies differently from RESP2 —
+  `SMEMBERS` among them, and this adapter feeds that result straight into
+  `filter_map` and `all?`. Nothing in the adapter's command set behaves
+  differently between the two, but that was previously unverified rather than
+  known.
+
+  - New integration spec drives the adapter against a live Redis. It skips when
+    no server is reachable, so contributors are not required to run one.
+  - CI adds an `rspec-redis` job with a Redis service, run as a matrix over
+    redis-rb 5.x and 6.x, and fails rather than skips if the service is missing
+    — a silent skip would read as a pass.
+  - Development dependency widened from `~> 5.0` to `>= 5.0, < 7`. The gem has
+    no runtime dependency on `redis` and never has, so this constrains nothing
+    for consumers; it only lets the library test what consumers actually use.
+  - README documents supported client versions, and that `protocol: 2` is not
+    needed.
+
+  No runtime code changed.
+
 ## 0.1.10
 
 ### Added

@@ -78,6 +78,56 @@ jobs:
       - name: Run RSpec
         run: bundle exec rspec
 
+  # The RedisAdapter's own unit spec runs against MockRedis, a pure-Ruby fake
+  # with no protocol layer, so it cannot see wire-format changes. redis-rb 6
+  # defaults to RESP3, which types several replies differently from RESP2 --
+  # SMEMBERS most notably, and this adapter feeds that straight into filter_map.
+  # This job drives the adapter against a real server on each supported major so
+  # a protocol regression fails here rather than in a consumer's app.
+  rspec-redis:
+    name: RSpec (real Redis, redis-rb ${{ matrix.redis-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        redis-version: ["~> 5.4", "~> 6.0"]
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      WHERE_IS_WALDO_REDIS_VERSION: ${{ matrix.redis-version }}
+      WHERE_IS_WALDO_TEST_REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      # Fails the job rather than skipping if the service is unreachable. The
+      # spec skips when it finds no server, which is right for a contributor's
+      # laptop and wrong here -- a silent skip would read as a pass.
+      - name: Require the Redis service to be reachable
+        run: |
+          bundle exec ruby -e '
+            require "redis"
+            url = ENV.fetch("WHERE_IS_WALDO_TEST_REDIS_URL")
+            abort "Redis unreachable at #{url}" unless Redis.new(url: url, timeout: 5).ping == "PONG"
+            puts "Redis reachable, redis-rb #{Redis::VERSION}"
+          '
+
+      - name: Run the Redis integration spec
+        run: bundle exec rspec spec/where_is_waldo/adapters/redis_adapter_integration_spec.rb
+
   cypress:
     name: Cypress E2E
     runs-on: ubuntu-latest

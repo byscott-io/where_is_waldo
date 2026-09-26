@@ -14,3 +14,7 @@ gemspec
 group :development, :test do
   gem "rake"
 end
+
+# CI pins this to each supported redis-rb major in turn, so the Redis adapter is
+# exercised on both RESP2 and RESP3. Unset, it resolves by the gemspec range.
+gem "redis", ENV["WHERE_IS_WALDO_REDIS_VERSION"] if ENV["WHERE_IS_WALDO_REDIS_VERSION"]
