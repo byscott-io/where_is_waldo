@@ -27,6 +27,12 @@ Notable changes to where_is_waldo. Format loosely follows
   - README documents supported client versions, and that `protocol: 2` is not
     needed.
 
+  The committed lockfile stays on redis 5.x, which keeps `mock_redis` at
+  0.53.0 for every existing spec. `mock_redis` 0.53.0 depends on `redis ~> 5`,
+  so resolving against redis 6 forces it down to 0.48.1 — that happens only
+  inside the redis 6 CI leg, which runs the real-server spec alone and never
+  touches MockRedis. No mock-based spec changed the double it runs against.
+
   No runtime code changed.
 
 ## 0.1.10
