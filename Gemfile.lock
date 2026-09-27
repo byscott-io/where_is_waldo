@@ -302,7 +302,7 @@ DEPENDENCIES
   mock_redis (~> 0.36)
   puma (>= 7.2.1)
   rake
-  redis (~> 5.0)
+  redis (>= 5.0, < 7)
   rspec-rails (~> 6.0)
   rubocop (~> 1.60)
   rubocop-rails (~> 2.23)

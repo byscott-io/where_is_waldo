@@ -148,6 +148,20 @@ WhereIsWaldo.configure do |config|
 end
 ```
 
+#### Redis adapter and client versions
+
+The gem does not depend on `redis`. Choosing `:redis` means supplying your own
+client, so you pick the version.
+
+`redis-rb` 5.x and 6.x are both supported and both run in CI against a real
+server. Version 6 switched to RESP3 by default, which changes reply types for
+some commands; none of the commands this adapter uses behave differently, and
+the integration spec exists to keep that true. Nothing here needs `protocol: 2`.
+
+The adapter stores presence under keys prefixed by `config.redis_prefix`
+(default `where_is_waldo`) and sets a TTL on session keys, so it does not need a
+cleanup job the way the database adapter does.
+
 ### Querying Presence
 
 ```ruby

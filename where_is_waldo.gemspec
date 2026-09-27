@@ -40,7 +40,11 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "factory_bot_rails", "~> 6.0"
   spec.add_development_dependency "mock_redis", "~> 0.36"
   spec.add_development_dependency "puma", ">= 7.2.1"
-  spec.add_development_dependency "redis", "~> 5.0"
+  # Development only: consumers choosing the Redis adapter bring their own
+  # client, so this constrains nothing for them. Spans 5 and 6 so the adapter
+  # can be tested on both -- redis-rb 6 defaults to RESP3, and the integration
+  # spec exists to prove that changes nothing for the commands used here.
+  spec.add_development_dependency "redis", ">= 5.0", "< 7"
   spec.add_development_dependency "rspec-rails", "~> 6.0"
   spec.add_development_dependency "rubocop", "~> 1.60"
   spec.add_development_dependency "rubocop-rails", "~> 2.23"
