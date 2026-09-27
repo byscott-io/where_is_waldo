@@ -107,11 +107,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # bundler-cache would set frozen mode, and this job deliberately varies
+      # the redis constraint via the Gemfile, so the resolution cannot match the
+      # committed lockfile. Install explicitly with frozen off instead.
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
-          bundler-cache: true
+          bundler-cache: false
+
+      - name: Install gems against the matrix redis version
+        run: |
+          bundle config set --local frozen false
+          bundle install --jobs 4
 
       # Fails the job rather than skipping if the service is unreachable. The
       # spec skips when it finds no server, which is right for a contributor's
