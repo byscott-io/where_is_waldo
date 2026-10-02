@@ -584,9 +584,9 @@
   integrity sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==
 
 "@rails/actioncable@^8.1.301":
-  version "8.1.301"
-  resolved "https://registry.yarnpkg.com/@rails/actioncable/-/actioncable-8.1.301.tgz#924ae5e44522e06770ae84d42b23e7488299fa89"
-  integrity sha512-n4Q6DfnqnZ604xgqeqURNyUmk6JtPoKf++UeV9agvecIkV3AcpgJs5D08Kx8WnZNgM7u4av9ezfIXv+CgdV94A==
+  version "8.1.400"
+  resolved "https://registry.yarnpkg.com/@rails/actioncable/-/actioncable-8.1.400.tgz#af41a431614e4abb007e65429197d1c5dbf43741"
+  integrity sha512-Qffc3/I9xcpeaal12hmi9EPRV3hz9FvakUHBR7kL0jpZviWwO9dyaG8F1ltcjkHIdFxQ5QqzRyequAWHMq17xQ==
 
 "@rolldown/binding-android-arm-eabi@1.2.8":
   version "1.2.8"
