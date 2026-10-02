@@ -30,10 +30,10 @@
   },
   "devDependencies": {
     "@byscott-io/eslint-config": "^0.2.0",
-    "@rails/actioncable": "^8.1.301",
+    "@rails/actioncable": "^8.1.400",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@testing-library/dom": "^10.4.1",
+    "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "cypress": "^16.1.0",
     "esbuild": "^0.28.2",
@@ -44,7 +44,7 @@
     "rollup": "^4.63.4",
     "rollup-plugin-esbuild": "^6.2.1",
     "start-server-and-test": "^3.0.12",
-    "vite": "^8.0.0",
+    "vite": "^8.3.1",
     "vitest": "^5.0.1"
   },
   "repository": {
@@ -75,7 +75,7 @@
     "js-yaml": "^4.3.2",
     "postcss": "^8.5.26",
     "qs": "^6.15.2",
-    "undici": "^7.29.0",
+    "undici": "^7.29.1",
     "systeminformation": "^5.31.17",
     "browserslist": "^4.28.9"
   }
