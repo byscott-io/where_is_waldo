@@ -70,7 +70,7 @@
     "access": "public"
   },
   "resolutions": {
-    "axios": "^1.18.0",
+    "axios": "^1.20.0",
     "joi": "^18.2.5",
     "js-yaml": "^4.3.2",
     "postcss": "^8.5.26",
