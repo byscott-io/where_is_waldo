@@ -125,11 +125,19 @@ module WhereIsWaldo
       def publish(subject_id, timeout: nil)
         return false if subject_id.blank?
 
-        subject = find_subject(subject_id)
-        keys = org_keys_for_subject(subject_id, timeout: timeout)
+        # ONE read of the subject's sessions, used for both halves. The org
+        # keys and the aggregate state are derived from the same rows, and a
+        # transition is the hottest path here -- fetching twice doubled the
+        # adapter traffic for no new information.
+        by_subject = WhereIsWaldo::PresenceService.sessions_for_subjects([subject_id], timeout: timeout)
+        sessions = sessions_for(by_subject, subject_id)
+
+        keys = org_keys_from(sessions, subject_id)
         return false if keys.empty?
 
-        member = build_member_by_id(subject, subject_id, timeout: timeout)
+        subject = find_subject(subject_id)
+        state = sessions.any? ? aggregate(sessions) : offline_state
+        member = merge_member(subject, state, id: subject_id)
         keys.each do |key|
           stream = "where_is_waldo:roster:#{key}"
           ActionCable.server.broadcast(stream, delta_message(member))
