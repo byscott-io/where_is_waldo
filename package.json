@@ -70,15 +70,15 @@
     "access": "public"
   },
   "resolutions": {
-    "axios": "^1.20.0",
-    "follow-redirects": "^1.16.1",
-    "joi": "^18.2.9",
+    "axios": "^1.21.0",
+    "follow-redirects": "^1.16.2",
+    "joi": "^18.3.0",
     "js-yaml": "^4.3.2",
-    "postcss": "^8.5.26",
-    "qs": "^6.15.2",
-    "undici": "^7.29.1",
-    "systeminformation": "^5.31.17",
-    "browserslist": "^4.28.9",
+    "postcss": "^8.5.32",
+    "qs": "^6.17.0",
+    "undici": "^7.30.1",
+    "systeminformation": "^5.33.16",
+    "browserslist": "^4.29.5",
     "source-map-js": "^1.2.2"
   }
 }
