@@ -102,6 +102,19 @@ RSpec.describe WhereIsWaldo::Roster do
       expect(described_class.org_keys_for_subject(user.id)).not_to include(described_class.org_key(org_a))
     end
 
+    # A subject id arriving from a cable connection is usually a STRING, while
+    # the database adapter keys its result by the typecast column, an Integer.
+    # A plain fetch misses, and the caller then falls back to resolving from
+    # the subject alone -- silently, and straight back to the guess this whole
+    # change exists to replace. Passing user.id on both sides, as the other
+    # examples do, cannot catch that.
+    it "finds the stored org when the subject id arrives as a string" do
+      create(:presence, subject: user, metadata: { described_class::ORG_KEY => described_class.org_key(org_b) })
+
+      expect(described_class.org_keys_for_subject(user.id.to_s))
+        .to eq([described_class.org_key(org_b)])
+    end
+
     # Rows written before this change carry no key, and must keep working.
     it "falls back to resolving from the subject when absent" do
       create(:presence, subject: user, metadata: { "platform" => "web" })

@@ -41,13 +41,33 @@ module WhereIsWaldo
       # rows written before this existed, and for apps with no container.
       def org_keys_for_subject(subject_id, timeout: nil)
         by_subject = WhereIsWaldo::PresenceService.sessions_for_subjects([subject_id], timeout: timeout)
-        sessions = by_subject.fetch(subject_id, [])
+        sessions = sessions_for(by_subject, subject_id)
         keys = sessions.filter_map do |session|
           session.dig(:metadata, ORG_KEY) || session.dig("metadata", ORG_KEY)
         end.uniq
         return keys if keys.any?
 
         [org_key(WhereIsWaldo.config.resolve_roster_org(find_subject(subject_id)))].compact
+      end
+
+      private
+
+      # THE KEY TYPES ON THE TWO SIDES ARE NOT GUARANTEED TO MATCH.
+      #
+      # The database adapter keys its result by the AR-typecast column value,
+      # typically an Integer, while a subject id arriving from a cable
+      # connection is often a String -- authenticate_proc returns whatever the
+      # host app decides, and connection params are strings. A plain fetch then
+      # misses, and the caller falls back to resolving from the subject alone:
+      # silently, and straight back to the guess this exists to replace.
+      # Comparing as strings is what stops a type difference becoming a wrong
+      # roster.
+      def sessions_for(by_subject, subject_id)
+        return by_subject[subject_id] if by_subject.key?(subject_id)
+
+        wanted = subject_id.to_s
+        _, sessions = by_subject.find { |key, _| key.to_s == wanted }
+        sessions || []
       end
     end
   end

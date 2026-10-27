@@ -103,10 +103,10 @@ module WhereIsWaldo
       )
     end
 
-    # The org this CONNECTION is scoped to. The container comes from the app's
-    # cable connection (the JWT's cid, in corebyscott apps), which is the only
-    # place the account the person is actually working in is known -- a lambda
-    # given just the subject has to guess, and guesses by association order.
+    # The org this CONNECTION is scoped to. The container comes from the host
+    # app's own cable connection, which is the only place that knows the org
+    # the person is actually working in -- a lambda given just the subject has
+    # to guess, and guesses by association order.
     def wiw_connection_org
       return @wiw_connection_org if defined?(@wiw_connection_org)
 
