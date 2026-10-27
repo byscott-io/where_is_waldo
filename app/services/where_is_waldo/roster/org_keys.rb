@@ -41,7 +41,14 @@ module WhereIsWaldo
       # rows written before this existed, and for apps with no container.
       def org_keys_for_subject(subject_id, timeout: nil)
         by_subject = WhereIsWaldo::PresenceService.sessions_for_subjects([subject_id], timeout: timeout)
-        sessions = sessions_for(by_subject, subject_id)
+        org_keys_from(sessions_for(by_subject, subject_id), subject_id)
+      end
+
+      # The same answer from sessions the caller has ALREADY loaded. A presence
+      # transition needs both the org keys and the subject's aggregate state,
+      # and both are derived from one set of session rows -- reading them twice
+      # doubles the adapter traffic on the hottest path in the library.
+      def org_keys_from(sessions, subject_id)
         keys = sessions.filter_map do |session|
           session.dig(:metadata, ORG_KEY) || session.dig("metadata", ORG_KEY)
         end.uniq

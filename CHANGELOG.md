@@ -27,6 +27,11 @@ Notable changes to where_is_waldo. Format loosely follows
   Stored in the existing `metadata` column, so **no migration is required**.
   `roster_org` is untouched and still works for single-org apps.
 
+- **A presence transition read a subject's sessions twice.** Publishing needs
+  both the org keys and the aggregate state, and both come from the same rows;
+  they are now derived from one read. This is the hottest path in the library,
+  so the second read was pure overhead.
+
 
 ## 0.1.11 - 2026-10-27
 
