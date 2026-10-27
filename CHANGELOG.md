@@ -15,10 +15,13 @@ Notable changes to where_is_waldo. Format loosely follows
   org they were not in.
 
   New `roster_org_for` receives `(subject, container)`, where the container is
-  the one the CONNECTION is scoped to -- the only place that answer exists.
-  The resolved org is stored on the presence row at connect and read back by
-  later broadcasts, so a subscriber and a background broadcast can no longer
-  resolve differently and end up on separate streams. A subject present in two
+  the one the CONNECTION is scoped to -- the only place that answer exists. It
+  applies on BOTH sides: the presence row stores the resolved org at connect
+  and later broadcasts read it back, and the roster subscription resolves the
+  same way, so a viewer and the broadcasts meant for them can no longer land
+  on different streams. `container` comes from your connection's
+  `identified_by :current_container`; without that it is nil and behaviour is
+  unchanged. A subject present in two
   orgs now appears in both rosters rather than one arbitrary one.
 
   Stored in the existing `metadata` column, so **no migration is required**.

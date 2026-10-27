@@ -13,12 +13,15 @@ module WhereIsWaldo
   class RosterChannel < ApplicationCable::Channel
     def subscribed
       subject = current_subject
-      mode = resolve_mode(subject)
+      org = resolve_org(subject)
+      return reject unless org
+
+      mode = WhereIsWaldo.config.resolve_mode(org)
       return reject unless mode
 
       @wiw_subject = subject
       @wiw_strategy = RosterDelivery.for(mode)
-      apply_plan(@wiw_strategy.subscribe_plan(subject, waldo_session_id))
+      apply_plan(@wiw_strategy.subscribe_plan(subject, waldo_session_id, org: org))
     end
 
     # Client-driven poll (pull/nudge modes). Transmits a filtered snapshot
@@ -31,11 +34,15 @@ module WhereIsWaldo
 
     private
 
-    def resolve_mode(subject)
-      org = WhereIsWaldo.config.resolve_roster_org(subject)
-      return nil unless org
+    # The org this VIEWER is watching. Resolved from the connection's container
+    # like the writer side, so the stream they subscribe to is the one deltas
+    # are actually broadcast into. Resolving from the subject alone here was
+    # the other half of the same bug: a viewer scoped to their second org sat
+    # on their first org's stream and simply never saw anything.
+    def resolve_org(subject)
+      return nil unless subject
 
-      WhereIsWaldo.config.resolve_mode(org)
+      WhereIsWaldo.config.resolve_roster_org(subject, container: connection.try(:current_container))
     end
 
     def apply_plan(plan)

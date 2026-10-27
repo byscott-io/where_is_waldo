@@ -92,7 +92,17 @@ module WhereIsWaldo
       # params[:metadata] is client-supplied, so letting a tab name its own
       # roster would let it subscribe itself into an org it has no business
       # seeing.
+      #
+      # The client's value is REMOVED FIRST, unconditionally. Only overwriting
+      # it when the server resolves an org leaves the hole open in exactly the
+      # case that matters: a connection with no org of its own could name any
+      # org it liked, the value would persist on the presence row, and later
+      # broadcasts read it back verbatim and push that subject's presence into
+      # a stream they have no claim on.
       metadata = (params[:metadata] || {}).to_h
+      metadata.delete(WhereIsWaldo::Roster::ORG_KEY)
+      metadata.delete(WhereIsWaldo::Roster::ORG_KEY.to_sym)
+
       key = WhereIsWaldo::Roster.org_key(wiw_connection_org)
       metadata[WhereIsWaldo::Roster::ORG_KEY] = key if key
 
