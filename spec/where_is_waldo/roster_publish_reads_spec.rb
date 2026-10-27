@@ -34,12 +34,14 @@ RSpec.describe WhereIsWaldo::Roster do
   # The saving must not have cost correctness: the delta still carries the
   # subject's real aggregate state, not a placeholder.
   it "still sends the subject's actual state" do
-    expect(ActionCable.server).to receive(:broadcast) do |_stream, message|
+    allow(ActionCable.server).to receive(:broadcast)
+
+    described_class.publish(user.id)
+
+    expect(ActionCable.server).to have_received(:broadcast) do |_stream, message|
       expect(message[:member][:status].to_s).to eq("active")
       expect(message[:member][:name]).to eq("Busy")
     end
-
-    described_class.publish(user.id)
   end
 
   it "still reports offline for a subject with no live sessions" do
@@ -47,10 +49,12 @@ RSpec.describe WhereIsWaldo::Roster do
     create(:presence, subject: user, last_heartbeat: 1.day.ago,
                       metadata: { described_class::ORG_KEY => described_class.org_key(org) })
 
-    expect(ActionCable.server).to receive(:broadcast) do |_stream, message|
-      expect(message[:member][:status].to_s).to eq("offline")
-    end
+    allow(ActionCable.server).to receive(:broadcast)
 
     described_class.publish(user.id)
+
+    expect(ActionCable.server).to have_received(:broadcast) do |_stream, message|
+      expect(message[:member][:status].to_s).to eq("offline")
+    end
   end
 end
