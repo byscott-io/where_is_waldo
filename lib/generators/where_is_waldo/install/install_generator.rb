@@ -32,9 +32,17 @@ module WhereIsWaldo
       end
 
       def create_channels
-        template "connection.rb.tt", "app/channels/application_cable/connection.rb"
-        template "channel.rb.tt", "app/channels/application_cable/channel.rb"
-        template "presence_channel.rb.tt", "app/channels/presence_channel.rb"
+        # NEVER overwrite an app's existing cable connection or channel base.
+        # A host app that already authenticates ActionCable has its auth,
+        # container scoping and session identity in those files, and the
+        # turnkey versions here provide only what this library needs -- so
+        # replacing them silently drops whatever else they did. Installing
+        # into an existing app is the common case, not the exception.
+        @kept_channels = []
+
+        copy_channel "connection.rb.tt", "app/channels/application_cable/connection.rb"
+        copy_channel "channel.rb.tt", "app/channels/application_cable/channel.rb"
+        copy_channel "presence_channel.rb.tt", "app/channels/presence_channel.rb"
       end
 
       def show_post_install_message
@@ -54,9 +62,33 @@ module WhereIsWaldo
         say "       <App />"
         say "     </PresenceProvider>"
         say ""
+        report_kept_channels
       end
 
       private
+
+      # Say plainly what was left alone. A silent skip is as confusing as a
+      # silent overwrite: the install looks complete and presence then fails
+      # because the app's own connection exposes no session identity.
+      def report_kept_channels
+        return if @kept_channels.blank?
+
+        say "Kept your existing files (not overwritten):", :yellow
+        @kept_channels.each { |f| say "  - #{f}" }
+        say ""
+        say "  WhereIsWaldo's channel reads connection.current_user and"
+        say "  connection.session_id. If your connection does not identify"
+        say "  both, add them -- or include WhereIsWaldo::JwtConnection."
+        say ""
+      end
+
+      def copy_channel(source, destination)
+        if File.exist?(File.join(destination_root, destination))
+          @kept_channels << destination
+        else
+          template source, destination
+        end
+      end
 
       def migration_version
         "[#{ActiveRecord::VERSION::STRING.to_f}]"

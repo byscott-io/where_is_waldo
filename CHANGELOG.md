@@ -5,6 +5,27 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+### Fixed
+
+- **The install generator emitted the pre-0.1.5 schema.** It wrote a unique
+  index on the session column alone, while 0.1.5 moved presence rows to being
+  keyed by `(subject, session)` precisely so two authenticated subjects who
+  collide on a session id cannot upsert onto each other's row — session ids are
+  client-supplied in some setups, and a reused JWT `jti` is enough. The adapter
+  has scoped every session lookup by both columns since; only the generator
+  lagged, so every app installed after 0.1.5 got a schema the library had
+  already moved away from and needed a follow-up migration to correct. An
+  unused second migration template carrying the right index (and a hardcoded
+  `Migration[7.0]`) has been removed rather than left as a second answer.
+
+- **The install generator overwrote an existing ActionCable connection.**
+  Installing into an app that already authenticates its own cable connection
+  replaced that file with the turnkey one, silently dropping whatever the app
+  did beyond what this library needs — container scoping and token bookkeeping
+  in the cases seen. Existing channel files are now kept, and the post-install
+  message names them and states what the channel requires of a connection
+  (`current_user` and `session_id`).
+
 ### Changed
 
 - **The Redis adapter is now tested against a real server, on both redis-rb 5
