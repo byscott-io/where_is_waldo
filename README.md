@@ -290,6 +290,32 @@ their live sessions (multiple browser tabs, mobile, etc.):
 WhereIsWaldo.configure do |config|
   # The org/account a subject belongs to. Required to enable the roster.
   config.roster_org = ->(subject) { subject.account }
+  #
+  # MULTI-ORG SUBJECTS: roster_org is handed only the subject, so it has to
+  # guess which org the person is in right now -- and `accounts.first` guesses
+  # by association order. Someone who has switched is then put on the wrong
+  # roster: invisible to the teammates they are with, shown to an org they are
+  # not in. Use roster_org_for instead, which also receives the container the
+  # CONNECTION is scoped to:
+  #
+  #   config.roster_org_for = ->(user, container) { container || user.accounts.first }
+  #
+  # `container` is read from your own ActionCable connection, so it is only
+  # ever non-nil if that connection identifies one:
+  #
+  #   module ApplicationCable
+  #     class Connection < ActionCable::Connection::Base
+  #       identified_by :current_user, :current_container, :session_id
+  #     end
+  #   end
+  #
+  # WhereIsWaldo::JwtConnection already does this. Without it `container` is
+  # always nil and the fallback above behaves exactly like plain roster_org --
+  # which is to say, like the bug.
+  #
+  # The resolved org is stored on the presence row at connect and read back by
+  # later broadcasts, so the subscriber and the broadcaster always agree on the
+  # stream. roster_org keeps working unchanged for single-org apps.
 
   # What a VIEWER may see (:poll/:nudge/:fanout). Any visibility rule,
   # server-enforced. Defaults to the viewer's whole org when unset.

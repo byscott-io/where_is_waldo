@@ -28,7 +28,7 @@ module WhereIsWaldo
     # Base contract. Channels call these; return values drive the channel's I/O.
     class Base
       # @return [Hash] { streams: [names], messages: [cable messages] }
-      def subscribe_plan(_subject, _session_id)
+      def subscribe_plan(_subject, _session_id, org: nil) # rubocop:disable Lint/UnusedMethodArgument
         { streams: [], messages: [] }
       end
 
@@ -50,8 +50,11 @@ module WhereIsWaldo
     # Instant push to a single shared per-account stream. NO visibility
     # filtering — everyone in the account sees everyone. O(1) per transition.
     class Broadcast < Base
-      def subscribe_plan(subject, _session_id)
-        org = config.resolve_roster_org(subject)
+      def subscribe_plan(subject, _session_id, org: nil)
+        # org comes from the channel, which knows the connection's container.
+        # Resolving it again here would reach a different answer for a subject
+        # in several orgs, and put the viewer on a stream nobody broadcasts to.
+        org ||= config.resolve_roster_org(subject)
         stream = Roster.stream_name(org)
         return { streams: [], messages: [] } unless stream
 
@@ -77,10 +80,13 @@ module WhereIsWaldo
         :poll
       end
 
-      def subscribe_plan(subject, session_id)
+      def subscribe_plan(subject, session_id, org: nil)
         current = current_members(subject)
         write_baseline(session_id, current)
-        { streams: subscribe_streams(subject), messages: [Roster.snapshot_message(current.values, mode: mode)] }
+        {
+          streams: subscribe_streams(subject, org: org),
+          messages: [Roster.snapshot_message(current.values, mode: mode)]
+        }
       end
 
       def poll_messages(subject, session_id)
@@ -101,7 +107,7 @@ module WhereIsWaldo
 
       # Streams to subscribe on connect. :poll needs none (data rides the poll
       # transmit); :nudge overrides this to also receive the account nudge.
-      def subscribe_streams(_subject)
+      def subscribe_streams(_subject, org: nil) # rubocop:disable Lint/UnusedMethodArgument
         []
       end
 
@@ -156,8 +162,9 @@ module WhereIsWaldo
       private
 
       # Also subscribe the account stream so this client receives nudges.
-      def subscribe_streams(subject)
-        stream = Roster.stream_name(config.resolve_roster_org(subject))
+      def subscribe_streams(subject, org: nil)
+        org ||= config.resolve_roster_org(subject)
+        stream = Roster.stream_name(org)
         stream ? [stream] : []
       end
     end
@@ -168,7 +175,7 @@ module WhereIsWaldo
     # its directional audience (config.roster_viewers_of). O(audience) per
     # transition — the price of instant delivery under restricted visibility.
     class Fanout < Base
-      def subscribe_plan(subject, _session_id)
+      def subscribe_plan(subject, _session_id, org: nil) # rubocop:disable Lint/UnusedMethodArgument
         members = Roster.members_for(config.resolve_visible_to(subject))
         {
           streams: [Roster.viewer_stream(subject.id)],

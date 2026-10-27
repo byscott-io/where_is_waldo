@@ -83,6 +83,16 @@ module WhereIsWaldo
     # roster_members_association: association used to build the default roster
     #   from the org when roster_members is unset (defaults to the pluralized
     #   subject_class, e.g. :users).
+    # roster_org_for: the container-aware form of roster_org. Receives
+    #   (subject, container) where container is the one the CONNECTION is
+    #   scoped to -- the account the person is actually working in, which a
+    #   subject-only lambda cannot know. Prefer this whenever subjects can
+    #   belong to more than one org; roster_org picks by association order,
+    #   which puts a switched user on the wrong roster: invisible to the
+    #   teammates they are with, visible to an org they are not.
+    #     config.roster_org_for = ->(user, container) { container || user.accounts.first }
+    attr_accessor :roster_org_for
+
     attr_accessor :roster_org, :roster_members, :roster_members_association
 
     # roster_visible_to: given a VIEWER, return the AR scope of subjects
@@ -142,6 +152,7 @@ module WhereIsWaldo
 
       # Presence roster (set per app to enable)
       @roster_org = nil
+      @roster_org_for = nil
       @roster_members = nil
       @roster_members_association = nil
       @roster_visible_to = nil
@@ -165,10 +176,17 @@ module WhereIsWaldo
     end
 
     # Resolve the org/container record for a subject (nil if unset/absent).
-    def resolve_roster_org(subject)
-      return nil unless roster_org && subject
+    # @param container [Object, nil] the connection's container, when known.
+    #   Only roster_org_for receives it; roster_org keeps its old arity so
+    #   existing apps are untouched.
+    def resolve_roster_org(subject, container: nil)
+      return nil unless subject
 
-      roster_org.call(subject)
+      if roster_org_for
+        roster_org_for.call(subject, container)
+      elsif roster_org
+        roster_org.call(subject)
+      end
     end
 
     # Association name used to derive the default roster from an org when
@@ -193,7 +211,7 @@ module WhereIsWaldo
 
     # True when the live-presence roster feature is configured.
     def roster_enabled?
-      !roster_org.nil?
+      !roster_org.nil? || !roster_org_for.nil?
     end
 
     # Resolve the AR scope of subjects a VIEWER may see. Defaults to the

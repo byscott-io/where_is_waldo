@@ -88,11 +88,41 @@ module WhereIsWaldo
     end
 
     def register_presence
+      # The org key is computed HERE and written over anything the client sent.
+      # params[:metadata] is client-supplied, so letting a tab name its own
+      # roster would let it subscribe itself into an org it has no business
+      # seeing.
+      #
+      # The client's value is REMOVED FIRST, unconditionally. Only overwriting
+      # it when the server resolves an org leaves the hole open in exactly the
+      # case that matters: a connection with no org of its own could name any
+      # org it liked, the value would persist on the presence row, and later
+      # broadcasts read it back verbatim and push that subject's presence into
+      # a stream they have no claim on.
+      metadata = (params[:metadata] || {}).to_h
+      metadata.delete(WhereIsWaldo::Roster::ORG_KEY)
+      metadata.delete(WhereIsWaldo::Roster::ORG_KEY.to_sym)
+
+      key = WhereIsWaldo::Roster.org_key(wiw_connection_org)
+      metadata[WhereIsWaldo::Roster::ORG_KEY] = key if key
+
       WhereIsWaldo.connect(
         session_id: waldo_session_id,
         subject_id: waldo_subject_id,
-        metadata: params[:metadata] || {}
+        metadata: metadata
       )
+    end
+
+    # The org this CONNECTION is scoped to. The container comes from the host
+    # app's own cable connection, which is the only place that knows the org
+    # the person is actually working in -- a lambda given just the subject has
+    # to guess, and guesses by association order.
+    def wiw_connection_org
+      return @wiw_connection_org if defined?(@wiw_connection_org)
+
+      subject = WhereIsWaldo.config.subject_class_constant&.find_by(id: waldo_subject_id)
+      container = connection.try(:current_container)
+      @wiw_connection_org = subject && WhereIsWaldo.config.resolve_roster_org(subject, container: container)
     end
 
     def roster_transition?(tab_visible, subject_active)
@@ -104,8 +134,7 @@ module WhereIsWaldo
     def resolve_roster_strategy
       return nil unless WhereIsWaldo.config.roster_enabled?
 
-      subject = WhereIsWaldo.config.subject_class_constant&.find_by(id: waldo_subject_id)
-      org = subject && WhereIsWaldo.config.resolve_roster_org(subject)
+      org = wiw_connection_org
       return nil unless org
 
       WhereIsWaldo::RosterDelivery.for(WhereIsWaldo.config.resolve_mode(org))
