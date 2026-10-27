@@ -5,6 +5,8 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.12 - 2026-10-27
+
 ### Fixed
 
 - **A subject in more than one org could be put on the wrong roster.**
