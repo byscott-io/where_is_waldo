@@ -5,6 +5,8 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.11 - 2026-10-27
+
 ### Fixed
 
 - **The install generator emitted the pre-0.1.5 schema.** It wrote a unique
