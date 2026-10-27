@@ -88,11 +88,31 @@ module WhereIsWaldo
     end
 
     def register_presence
+      # The org key is computed HERE and written over anything the client sent.
+      # params[:metadata] is client-supplied, so letting a tab name its own
+      # roster would let it subscribe itself into an org it has no business
+      # seeing.
+      metadata = (params[:metadata] || {}).to_h
+      key = WhereIsWaldo::Roster.org_key(wiw_connection_org)
+      metadata[WhereIsWaldo::Roster::ORG_KEY] = key if key
+
       WhereIsWaldo.connect(
         session_id: waldo_session_id,
         subject_id: waldo_subject_id,
-        metadata: params[:metadata] || {}
+        metadata: metadata
       )
+    end
+
+    # The org this CONNECTION is scoped to. The container comes from the app's
+    # cable connection (the JWT's cid, in corebyscott apps), which is the only
+    # place the account the person is actually working in is known -- a lambda
+    # given just the subject has to guess, and guesses by association order.
+    def wiw_connection_org
+      return @wiw_connection_org if defined?(@wiw_connection_org)
+
+      subject = WhereIsWaldo.config.subject_class_constant&.find_by(id: waldo_subject_id)
+      container = connection.try(:current_container)
+      @wiw_connection_org = subject && WhereIsWaldo.config.resolve_roster_org(subject, container: container)
     end
 
     def roster_transition?(tab_visible, subject_active)
@@ -104,8 +124,7 @@ module WhereIsWaldo
     def resolve_roster_strategy
       return nil unless WhereIsWaldo.config.roster_enabled?
 
-      subject = WhereIsWaldo.config.subject_class_constant&.find_by(id: waldo_subject_id)
-      org = subject && WhereIsWaldo.config.resolve_roster_org(subject)
+      org = wiw_connection_org
       return nil unless org
 
       WhereIsWaldo::RosterDelivery.for(WhereIsWaldo.config.resolve_mode(org))

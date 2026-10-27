@@ -34,6 +34,13 @@ module WhereIsWaldo
     RANK = { active: 3, idle: 2, background: 1, offline: 0 }.freeze
     DEFAULT_PLATFORM = "web"
 
+    # The metadata key holding which roster a session belongs to. Defined on
+    # the class, not the singleton, so callers can reference
+    # WhereIsWaldo::Roster::ORG_KEY.
+    ORG_KEY = "wiw_org"
+
+    extend OrgKeys
+
     class << self
       # Shared stream name for an org record (nil when org is absent).
       def stream_name(org)
@@ -45,8 +52,8 @@ module WhereIsWaldo
 
       # Shared stream name for the org a subject belongs to (nil when the roster
       # is unconfigured or the subject has no org).
-      def stream_for_subject(subject)
-        stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
+      def stream_for_subject(subject, container: nil)
+        stream_name(WhereIsWaldo.config.resolve_roster_org(subject, container: container))
       end
 
       # Full roster state for an org: every member subject with their current
@@ -119,11 +126,14 @@ module WhereIsWaldo
         return false if subject_id.blank?
 
         subject = find_subject(subject_id)
-        stream = stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
-        return false unless stream
+        keys = org_keys_for_subject(subject_id, timeout: timeout)
+        return false if keys.empty?
 
         member = build_member_by_id(subject, subject_id, timeout: timeout)
-        ActionCable.server.broadcast(stream, delta_message(member))
+        keys.each do |key|
+          stream = "where_is_waldo:roster:#{key}"
+          ActionCable.server.broadcast(stream, delta_message(member))
+        end
         true
       rescue StandardError => e
         Rails.logger&.warn("[WhereIsWaldo::Roster] publish failed for #{subject_id}: #{e.class}: #{e.message}")
@@ -158,11 +168,10 @@ module WhereIsWaldo
       def publish_nudge(subject_id)
         return false if subject_id.blank?
 
-        subject = find_subject(subject_id)
-        stream = stream_name(WhereIsWaldo.config.resolve_roster_org(subject))
-        return false unless stream
+        keys = org_keys_for_subject(subject_id)
+        return false if keys.empty?
 
-        ActionCable.server.broadcast(stream, nudge_message)
+        keys.each { |key| ActionCable.server.broadcast("where_is_waldo:roster:#{key}", nudge_message) }
         true
       rescue StandardError => e
         Rails.logger&.warn("[WhereIsWaldo::Roster] nudge failed for #{subject_id}: #{e.class}: #{e.message}")

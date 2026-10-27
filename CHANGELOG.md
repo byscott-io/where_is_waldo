@@ -5,6 +5,26 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+### Fixed
+
+- **A subject in more than one org could be put on the wrong roster.**
+  `roster_org` receives only the subject, so an app whose users belong to
+  several orgs had to guess, and the obvious guess (`accounts.first`) is
+  association order rather than the org the person is actually working in.
+  They were then invisible to the teammates they were with, and shown to an
+  org they were not in.
+
+  New `roster_org_for` receives `(subject, container)`, where the container is
+  the one the CONNECTION is scoped to -- the only place that answer exists.
+  The resolved org is stored on the presence row at connect and read back by
+  later broadcasts, so a subscriber and a background broadcast can no longer
+  resolve differently and end up on separate streams. A subject present in two
+  orgs now appears in both rosters rather than one arbitrary one.
+
+  Stored in the existing `metadata` column, so **no migration is required**.
+  `roster_org` is untouched and still works for single-org apps.
+
+
 ## 0.1.11 - 2026-10-27
 
 ### Fixed
