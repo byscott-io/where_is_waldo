@@ -14,7 +14,12 @@ class CreatePresences < ActiveRecord::Migration<%= migration_version %>
       t.timestamps
     end
 
-    add_index :presences, :<%= session_column %>, unique: true
+    # (subject, session) must be unique TOGETHER, never session alone. Session
+    # ids are not globally unique -- they are client-supplied in some setups,
+    # and a reused JWT jti is enough -- so keying on the session alone lets two
+    # authenticated subjects upsert onto each other's presence row. This is the
+    # keying the adapter uses: every session lookup scopes by both columns.
+    add_index :presences, [ :<%= subject_column %>, :<%= session_column %> ], unique: true
     add_index :presences, :last_heartbeat
   end
 end

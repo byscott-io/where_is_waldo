@@ -41,6 +41,13 @@ rails generate where_is_waldo:install --adapter=redis --subject_column=user_id
 npm install @byscott-io/where-is-waldo @rails/actioncable
 ```
 
+Installing into an app that already has `app/channels/application_cable/`?
+Those files are kept, never overwritten — the generator only adds what is
+missing, and says which it left alone. The presence channel needs the
+connection to identify **`current_user`** and **`session_id`**; add them to
+your own connection, or `include WhereIsWaldo::JwtConnection` (corebyscott
+apps) to get both from the JWT.
+
 ### 2. Configure
 
 ```ruby
