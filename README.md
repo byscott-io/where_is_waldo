@@ -549,10 +549,14 @@ educators, small businesses and families, where several Rails and React apps
 each wanted "who is online right now" without paying for a hosted websocket
 service.
 
-**No account or API key is required, and nothing phones home.** Presence lives
-in your own database or your own Redis, and the only infrastructure it needs is
-the ActionCable you already run. The sibling tools below are hosted services and
-do require an account; this gem is a library and does not.
+**No account or API key is required, and nothing phones home.** This gem keeps
+no store of its own. Presence lives in one table in your own database, or as
+expiring keys in your own Redis, and it is transient either way — a session's
+row is removed once it stops heartbeating, and Redis keys carry a TTL. The only
+infrastructure it needs is the ActionCable you already run.
+
+The sibling tools below are hosted services and do require an account; this gem
+is a library and does not.
 
 Other tools from the same suite, if a shared backend is what you actually want
 rather than a library:
