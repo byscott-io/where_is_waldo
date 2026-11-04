@@ -549,10 +549,10 @@ educators, small businesses and families, where several Rails and React apps
 each wanted "who is online right now" without paying for a hosted websocket
 service.
 
-It is deliberately standalone. There is no byscott.io account, API key or
-service dependency anywhere in this gem: presence lives in your own database or
-your own Redis, and the only infrastructure it needs is the ActionCable you
-already run. That is the whole point of it.
+**No account or API key is required, and nothing phones home.** Presence lives
+in your own database or your own Redis, and the only infrastructure it needs is
+the ActionCable you already run. The sibling tools below are hosted services and
+do require an account; this gem is a library and does not.
 
 Other tools from the same suite, if a shared backend is what you actually want
 rather than a library:
