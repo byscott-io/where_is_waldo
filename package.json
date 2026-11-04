@@ -64,7 +64,7 @@
   "bugs": {
     "url": "https://github.com/byscott-io/where_is_waldo/issues"
   },
-  "homepage": "https://github.com/byscott-io/where_is_waldo#readme",
+  "homepage": "https://byscott.io",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"

@@ -2,6 +2,9 @@
 
 Real-time presence tracking for Rails + React using ActionCable.
 
+Open source, and built for and used in production by the [byscott.io](https://byscott.io)
+suite of tools for churches, educators, small businesses and families.
+
 [![CI](https://github.com/byscott-io/where_is_waldo/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/byscott-io/where_is_waldo/actions/workflows/ci.yml)
 [![Gem Version](https://img.shields.io/gem/v/where_is_waldo)](https://rubygems.org/gems/where_is_waldo)
 [![npm version](https://img.shields.io/npm/v/@byscott-io/where-is-waldo)](https://www.npmjs.com/package/@byscott-io/where-is-waldo)
@@ -537,6 +540,30 @@ gem guarantees, and what your app must do:
 - **Heartbeat/DoS.** Heartbeats are client-paced DB writes; roster broadcasts
   are gated to transitions. For large or hostile deployments use the Redis
   adapter and consider rate-limiting.
+
+## About
+
+WhereIsWaldo is maintained by Scott Gibson and came out of a real need across
+[byscott.io](https://byscott.io) — a suite of software tools for churches,
+educators, small businesses and families, where several Rails and React apps
+each wanted "who is online right now" without paying for a hosted websocket
+service.
+
+It is deliberately standalone. There is no byscott.io account, API key or
+service dependency anywhere in this gem: presence lives in your own database or
+your own Redis, and the only infrastructure it needs is the ActionCable you
+already run. That is the whole point of it.
+
+Other tools from the same suite, if a shared backend is what you actually want
+rather than a library:
+
+- **[IssuesByScott](https://issues.byscott.io)** — error reporting, an issue
+  portal your users can file into, and deploy tracking
+- **[BillingByScott](https://billing.byscott.io)** — subscriptions, invoicing
+  and entitlement checks across several apps
+- **[MetricsByScott](https://metrics.byscott.io)** — events, page views and
+  time-varied metrics, with a data warehouse rather than a dashboard you cannot
+  query
 
 ## License
 
