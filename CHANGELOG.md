@@ -5,6 +5,30 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.13 - 2026-11-04
+
+### Documentation
+
+No code changes. This release exists to get the README onto the npm page, which
+only refreshes its rendered README on a new version.
+
+- **The README now says where this came from.** It previously mentioned
+  byscott.io zero times in 543 lines, so the one public, indexed page the
+  project owns pointed back at nothing. Adds a line under the tagline and an
+  About section naming the suite and three sibling tools.
+- **States plainly what the gem requires, and what it does not.** No account, no
+  API key, and no outbound calls of any kind — verified against the shipped
+  code, which contains no HTTP client and no hostnames. The sibling tools linked
+  in that section are hosted services and do require accounts; this does not,
+  and the distinction is now explicit rather than left to the reader.
+- **States that presence data is transient and lives in the consumer's own
+  store.** One table, or Redis keys with a TTL; a session's row is removed once
+  it stops heartbeating. This answers the question a developer actually asks of
+  a presence library — whether it quietly accumulates rows they then have to
+  manage.
+- `homepage` now points at byscott.io. `repository` and `bugs` still point at
+  this public repo, so source and issues stay one click away from the npm page.
+
 ## 0.1.12 - 2026-10-27
 
 ### Fixed
