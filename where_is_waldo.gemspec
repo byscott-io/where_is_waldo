@@ -44,6 +44,7 @@ Gem::Specification.new do |spec|
   # client, so this constrains nothing for them. Spans 5 and 6 so the adapter
   # can be tested on both -- redis-rb 6 defaults to RESP3, and the integration
   # spec exists to prove that changes nothing for the commands used here.
+  spec.add_development_dependency "bundler-audit", "~> 0.9"
   spec.add_development_dependency "redis", ">= 5.0", "< 7"
   spec.add_development_dependency "rspec-rails", "~> 6.0"
   spec.add_development_dependency "rubocop", "~> 1.60"

@@ -48,6 +48,21 @@ jobs:
       - name: Run Vitest
         run: yarn test
 
+  bundler_audit:
+    name: Bundler Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Scan for known security vulnerabilities in gems used
+        run: bundle exec bundler-audit check --update
+
   rubocop:
     name: RuboCop
     runs-on: ubuntu-latest
