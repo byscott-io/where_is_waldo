@@ -5,6 +5,27 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.14 - 2026-11-06
+
+### Fixed
+
+- **Cable connections were rejected in every app using an external identity
+  server.** `JwtConnection` resolved the connection's subject with
+  `find_by(id: payload["sub"])`. That is correct when `sub` is the application's
+  own user id, but an identity server issues a UUID subject, so the lookup
+  matched nothing and every connection was refused -- which meant no presence
+  and no broadcasting at all.
+
+  The failure was silent: a rejected connection is indistinguishable from a
+  client that never subscribed, and a count of presence rows cannot detect it
+  either, since those rows are TTL-transient and zero is also the healthy idle
+  state.
+
+  Resolution now goes through the host application's identity resolver when it
+  is in that mode, mapping the subject through `users.identity_id`. An
+  application whose presence subject is some other model keeps the
+  primary-key lookup, and an application without corebyscott is untouched.
+
 ## 0.1.13 - 2026-11-04
 
 ### Documentation
