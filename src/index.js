@@ -3,6 +3,7 @@ export {
   configureCable,
   getConsumer,
   disconnectCable,
+  checkConnection,
   getCableConfig,
   handleMessage,
   subscribeToEvent,

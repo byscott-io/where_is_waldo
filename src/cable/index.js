@@ -53,6 +53,7 @@ export function configureCable(options = {}) {
   tokenInFlight = null;
   // Reset consumer when config changes
   if (consumer) {
+    stopWatchdog();
     consumer.disconnect();
     consumer = null;
   }
@@ -128,6 +129,123 @@ function buildUrl() {
   return `${url}${separator}token=${encodeURIComponent(token)}`;
 }
 
+// --- Reconnection watchdog -------------------------------------------------
+//
+// ActionCable's own ConnectionMonitor normally handles reconnecting, and while
+// it is running this code deliberately does nothing. The problem is that the
+// monitor can be switched off PERMANENTLY, and then nothing in ActionCable
+// ever turns it back on:
+//
+//   close({allowReconnect}) { if (!allowReconnect) { this.monitor.stop() } }
+//   stop() { this.stopPolling(); removeEventListener("visibilitychange", ...) }
+//
+// stop() unregisters the very listener that would notice the tab being
+// focused again, so the page is left permanently offline. A server can trigger
+// that from the outside by sending a disconnect with reconnect: false, which
+// Rails does for an unauthorized or remotely-disconnected connection.
+//
+// Observed in production: a client's socket closed and the tab then ran for
+// SEVEN AND A HALF HOURS making ordinary HTTP requests, visible and focused,
+// without a single further WebSocket attempt. Presence stayed empty the whole
+// time and anything broadcast to online subscribers missed it. Nothing was
+// refused -- nothing was attempted.
+//
+// A presence library cannot delegate its only recovery path to something that
+// can be disabled by the other end. So: while we want a connection, notice a
+// monitor that has stopped and start it again.
+const WATCHDOG_INTERVAL_MS = 10000;
+
+// Whether a connection is WANTED. False after an intentional disconnect, so
+// the watchdog never undoes a deliberate teardown.
+let connectionWanted = false;
+let watchdogTimer = null;
+let watchdogVisibilityHandler = null;
+
+function connectionInternals() {
+  // Reaching into ActionCable's internals, so every access is guarded: a
+  // future version may rename these, and a presence heartbeat must not be
+  // what breaks an upgrade.
+  try {
+    const connection = consumer && consumer.connection;
+    if (!connection) return null;
+    return { connection, monitor: connection.monitor || null };
+  } catch {
+    return null;
+  }
+}
+
+// Returns what it did, which is what the tests assert on.
+export function checkConnection() {
+  if (!connectionWanted) return 'not-wanted';
+
+  const internals = connectionInternals();
+  if (!internals) return 'no-consumer';
+
+  const { connection, monitor } = internals;
+
+  try {
+    if (typeof connection.isOpen === 'function' && connection.isOpen()) return 'open';
+
+    // A running monitor is already retrying with its own backoff. Opening a
+    // second socket underneath it would be worse than waiting.
+    if (monitor && typeof monitor.isRunning === 'function' && monitor.isRunning()) {
+      return 'monitor-running';
+    }
+
+    // The monitor has stopped while we still want a connection. Starting it
+    // re-registers the visibilitychange listener and resumes polling, and its
+    // first poll reopens -- so this hands recovery back to ActionCable rather
+    // than running a competing reconnect loop here.
+    if (monitor && typeof monitor.start === 'function') {
+      monitor.start();
+      return 'monitor-restarted';
+    }
+
+    // No monitor to restart: open directly.
+    if (typeof connection.open === 'function') {
+      connection.open();
+      return 'opened';
+    }
+
+    return 'nothing-to-do';
+  } catch {
+    // Never let a failed recovery attempt propagate into a caller's render or
+    // heartbeat.
+    return 'error';
+  }
+}
+
+function startWatchdog() {
+  connectionWanted = true;
+  if (watchdogTimer) return;
+
+  watchdogTimer = setInterval(checkConnection, WATCHDOG_INTERVAL_MS);
+  // Unref where available so a Node process (tests, SSR) is not held open.
+  if (watchdogTimer && typeof watchdogTimer.unref === 'function') watchdogTimer.unref();
+
+  // Our OWN visibility listener, because the monitor's is exactly what gets
+  // removed when it stops. Focusing the tab is the moment a person notices
+  // things are stale, so it should also be the moment we recover.
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    watchdogVisibilityHandler = () => {
+      if (document.visibilityState === 'visible') checkConnection();
+    };
+    document.addEventListener('visibilitychange', watchdogVisibilityHandler);
+  }
+}
+
+function stopWatchdog() {
+  connectionWanted = false;
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+  if (watchdogVisibilityHandler && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', watchdogVisibilityHandler);
+    watchdogVisibilityHandler = null;
+  }
+}
+
 /**
  * Get or create the ActionCable consumer
  * @returns {Consumer}
@@ -149,6 +267,7 @@ export function getConsumer() {
     // "online" subscribers reaches nobody. Resolving per attempt means a
     // refreshed token is picked up by the next retry with no intervention.
     consumer = createConsumer(buildUrl);
+    startWatchdog();
   }
 
   return consumer;
@@ -158,6 +277,9 @@ export function getConsumer() {
  * Disconnect and reset the consumer
  */
 export function disconnectCable() {
+  // Deliberate: stop wanting a connection first, so the watchdog does not
+  // immediately reconnect what the caller just took down.
+  stopWatchdog();
   if (consumer) {
     consumer.disconnect();
     consumer = null;
