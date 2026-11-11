@@ -98,7 +98,12 @@ describe('cable URL and token', () => {
       });
     });
 
-    it('does not start a second resolve while one is in flight', async () => {
+    it('does not INVOKE the provider again while a resolve is in flight', async () => {
+      // The provider's side effect is usually a refresh request, so a
+      // reconnect storm must not fire it per attempt. An earlier version of
+      // this guard only avoided tracking a second promise and still called the
+      // provider every time -- and dropped the untracked promise without a
+      // rejection handler, which CI caught as unhandled errors.
       const getToken = vi.fn(() => Promise.resolve('tok'));
       configureCable({ url: '/cable', getToken });
       getConsumer();
@@ -107,24 +112,26 @@ describe('cable URL and token', () => {
       resolveUrl();
       resolveUrl();
 
-      // Three attempts, one outstanding resolve.
-      expect(getToken).toHaveBeenCalledTimes(3);
+      expect(getToken).toHaveBeenCalledTimes(1);
       await vi.waitFor(() => expect(resolveUrl()).toBe('/cable?token=tok'));
     });
 
-    it('falls back to the cached token when a later resolve rejects', async () => {
+    it('keeps the last good token when a later resolve rejects', async () => {
       let mode = 'ok';
       configureCable({
         url: '/cable',
-        getToken: () => (mode === 'ok' ? Promise.resolve('good') : Promise.reject(new Error('nope'))),
+        getToken: () => (mode === 'ok'
+          ? Promise.resolve('good')
+          : Promise.reject(new Error('refresh unavailable'))),
       });
       getConsumer();
       resolveUrl();
       await vi.waitFor(() => expect(resolveUrl()).toBe('/cable?token=good'));
 
       mode = 'fail';
-      // Still the last known-good token, not a tokenless URL.
-      expect(resolveUrl()).toBe('/cable?token=good');
+      // The rejection is handled internally -- an unhandled rejection here
+      // fails the suite, which is how CI caught the earlier version.
+      resolveUrl();
       await vi.waitFor(() => expect(resolveUrl()).toBe('/cable?token=good'));
     });
 
@@ -138,6 +145,31 @@ describe('cable URL and token', () => {
       getConsumer();
 
       // The old token must NOT leak into the new configuration.
+      expect(resolveUrl()).toBe('/cable');
+    });
+  });
+
+  describe('a provider that stops returning a token', () => {
+    it('goes TOKENLESS when a sync provider later returns null', async () => {
+      // Sign-out, or storage cleared. Falling back to the cached token here
+      // meant reconnecting with the OLD token instead of letting the server
+      // refuse a tokenless connection properly. Raised in review.
+      let token = 'live-token';
+      configureCable({ url: '/cable', getToken: () => token });
+      getConsumer();
+      expect(resolveUrl()).toBe('/cable?token=live-token');
+
+      token = null;
+      expect(resolveUrl()).toBe('/cable');
+    });
+
+    it('treats an empty string the same way', async () => {
+      let token = 'live-token';
+      configureCable({ url: '/cable', getToken: () => token });
+      getConsumer();
+      resolveUrl();
+
+      token = '';
       expect(resolveUrl()).toBe('/cable');
     });
   });

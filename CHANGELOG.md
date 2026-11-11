@@ -40,6 +40,15 @@ Notable changes to where_is_waldo. Format loosely follows
   accessor can raise outright with cookies blocked or in a private window; the
   connection now proceeds without a token and lets the server decide.
 
+### Changed
+
+- A **synchronous** `getToken` returning `null` is now taken at face value: the
+  socket connects with no token and the server decides. Previously the last
+  cached token was reused, so after a sign-out a client kept reconnecting with
+  the OLD token rather than being refused properly. A rejected or throwing
+  provider still falls back to the last known token, since those mean "could
+  not answer" rather than "there is no token".
+
 ## 0.1.14 - 2026-11-06
 
 ### Fixed

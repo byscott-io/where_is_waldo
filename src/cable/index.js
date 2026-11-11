@@ -69,39 +69,53 @@ let cachedToken = null;
 let tokenInFlight = null;
 
 // Resolve getToken, tolerating either a plain value or a promise.
-//
-// Never throws: a token provider that blows up -- a storage accessor can, with
-// cookies blocked or in a private window -- must not take the socket down with
-// it. A missing token simply means the server decides, which is where that
-// decision belongs anyway.
 function resolveToken() {
   if (!config.getToken) return null;
+
+  // While an async resolve is outstanding, do NOT call the provider again.
+  //
+  // Raised in review: the earlier guard only stopped a second promise from
+  // being TRACKED, not the provider from being invoked, so a reconnect storm
+  // fired its side effect -- typically a refresh request -- on every attempt.
+  // It also left that second promise without a rejection handler, which CI
+  // caught as unhandled errors. One guard fixes both.
+  if (tokenInFlight) return cachedToken;
 
   let value;
   try {
     value = config.getToken();
   } catch {
+    // The provider could not answer at all. Keep the last token rather than
+    // dropping a working connection over a storage hiccup -- a cookie
+    // accessor can raise outright with site data blocked.
     return cachedToken;
   }
 
   if (value && typeof value.then === 'function') {
-    // Async provider: serve the cached value now, refresh it for next time.
-    if (!tokenInFlight) {
-      tokenInFlight = value
-        .then((token) => {
-          if (token) cachedToken = token;
-          return token;
-        })
-        .catch(() => null)
-        .finally(() => {
-          tokenInFlight = null;
-        });
-    }
+    tokenInFlight = value
+      .then((token) => {
+        // A null RESOLUTION is ambiguous -- it can mean "could not refresh" --
+        // so the previous token is kept and a later retry gets another go.
+        // That is the opposite of the synchronous case below, deliberately.
+        if (token) cachedToken = token;
+        return token;
+      })
+      .catch(() => null)
+      .finally(() => {
+        tokenInFlight = null;
+      });
+
     return cachedToken;
   }
 
-  if (value) cachedToken = value;
-  return value || cachedToken;
+  // A SYNCHRONOUS answer is authoritative, including "no token".
+  //
+  // Raised in review: falling back to the cache here meant that once a
+  // provider had returned a token, a later deliberate null -- a sign-out,
+  // storage cleared -- kept reconnecting with the OLD token instead of going
+  // tokenless and letting the server refuse it properly.
+  cachedToken = value || null;
+  return cachedToken;
 }
 
 // Built fresh for every connection attempt -- see getConsumer.
