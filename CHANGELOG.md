@@ -5,6 +5,51 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.16 - 2026-11-11
+
+### Fixed
+
+- **A client could stop reconnecting FOREVER, and nothing in ActionCable would
+  turn it back on.** ActionCable's `ConnectionMonitor` is the only thing that
+  reconnects a dropped socket, and it can be switched off permanently:
+
+  ```js
+  close({allowReconnect}) { if (!allowReconnect) { this.monitor.stop() } }
+  stop() { this.stopPolling(); removeEventListener("visibilitychange", ...) }
+  ```
+
+  `stop()` unregisters the very listener that would notice the tab being
+  focused again, and nothing re-registers it. The far end can trigger this
+  from outside the browser: Rails sends a disconnect with `reconnect: false`
+  for an unauthorized or remotely-disconnected connection.
+
+  Observed in production: a socket closed and the tab then ran for SEVEN AND A
+  HALF HOURS -- visible, focused, making ordinary HTTP requests -- without a
+  single further WebSocket attempt. Presence stayed empty the whole time and
+  anything broadcast to online subscribers missed it. Nothing was refused;
+  nothing was attempted.
+
+  There is now a watchdog: while a connection is wanted, waldo notices a
+  monitor that has stopped and starts it again, on a 10-second interval and on
+  its own `visibilitychange` listener. It deliberately does NOTHING while the
+  monitor is running, so it never opens a competing socket or interferes with
+  ActionCable's backoff, and it never undoes a deliberate `disconnectCable()`
+  or a teardown from `configureCable()`.
+
+### Added
+
+- `checkConnection()` is exported. It performs one watchdog pass and returns
+  what it did (`open`, `monitor-running`, `monitor-restarted`, `opened`,
+  `not-wanted`, `no-consumer`, `error`), which makes the recovery path
+  testable and gives an application a way to force a check -- after a resume
+  from sleep, say.
+
+### Changed
+
+- Every read of ActionCable's internals is guarded and returns `error` rather
+  than throwing, so a future rename inside ActionCable degrades the watchdog
+  instead of breaking a consumer's render or heartbeat.
+
 ## 0.1.15 - 2026-11-10
 
 ### Fixed

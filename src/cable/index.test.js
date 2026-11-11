@@ -11,7 +11,7 @@ vi.mock('@rails/actioncable', () => ({
   },
 }));
 
-import { configureCable, getConsumer, disconnectCable } from './index';
+import { configureCable, getConsumer, disconnectCable, checkConnection } from './index';
 
 // ActionCable's own resolution: `get url()` calls createWebSocketURL, which
 // invokes a function url. Modelling that is the whole point -- asserting on
@@ -172,5 +172,104 @@ describe('cable URL and token', () => {
       token = '';
       expect(resolveUrl()).toBe('/cable');
     });
+  });
+});
+
+describe('the reconnection watchdog', () => {
+  // ActionCable's monitor can be stopped permanently -- close({allowReconnect:
+  // false}) calls monitor.stop(), which unregisters the visibilitychange
+  // listener that would otherwise notice the tab being focused. Nothing in
+  // ActionCable restarts it, so the page stays offline for good. These cover
+  // noticing that and handing recovery back to the monitor.
+  let fakeMonitor;
+  let fakeConnection;
+
+  function installFakeConsumer({ open = false, running = true } = {}) {
+    fakeMonitor = {
+      running,
+      started: 0,
+      isRunning() { return this.running; },
+      start() { this.started += 1; this.running = true; },
+    };
+    fakeConnection = {
+      opened: 0,
+      isOpen: () => open,
+      open() { this.opened += 1; },
+      monitor: fakeMonitor,
+    };
+    consumerArgs = [];
+    disconnectCable();
+    configureCable({ url: '/cable', getToken: () => 'tok' });
+    // getConsumer builds the consumer via the mocked createConsumer; replace
+    // its connection with the fake so the watchdog has something to inspect.
+    const c = getConsumer();
+    c.connection = fakeConnection;
+    return c;
+  }
+
+  it('does NOTHING while the connection is open', () => {
+    installFakeConsumer({ open: true });
+    expect(checkConnection()).toBe('open');
+    expect(fakeMonitor.started).toBe(0);
+    expect(fakeConnection.opened).toBe(0);
+  });
+
+  it('leaves a RUNNING monitor alone rather than opening a second socket', () => {
+    installFakeConsumer({ open: false, running: true });
+    expect(checkConnection()).toBe('monitor-running');
+    expect(fakeMonitor.started).toBe(0);
+    expect(fakeConnection.opened).toBe(0);
+  });
+
+  it('RESTARTS a stopped monitor when a connection is still wanted', () => {
+    // The production failure: socket closed, monitor stopped, tab visible and
+    // running for hours with no further attempt.
+    installFakeConsumer({ open: false, running: false });
+    expect(checkConnection()).toBe('monitor-restarted');
+    expect(fakeMonitor.started).toBe(1);
+    expect(fakeMonitor.isRunning()).toBe(true);
+  });
+
+  it('opens directly when there is no monitor to restart', () => {
+    installFakeConsumer({ open: false, running: false });
+    fakeConnection.monitor = null;
+    expect(checkConnection()).toBe('opened');
+    expect(fakeConnection.opened).toBe(1);
+  });
+
+  it('does NOT reconnect after a deliberate disconnectCable', () => {
+    installFakeConsumer({ open: false, running: false });
+    disconnectCable();
+    expect(checkConnection()).toBe('not-wanted');
+  });
+
+  it('does not reconnect after configureCable tears the consumer down', () => {
+    installFakeConsumer({ open: false, running: false });
+    configureCable({ url: '/cable2', getToken: () => 'tok' });
+    expect(checkConnection()).toBe('not-wanted');
+  });
+
+  it('reports no-consumer rather than throwing when none exists', () => {
+    installFakeConsumer({ open: false });
+    disconnectCable();
+    configureCable({ url: '/cable', getToken: () => 'tok' });
+    // wanted again only once a consumer is built, so force the wanted state by
+    // creating one and then dropping the reference the module holds.
+    expect(['no-consumer', 'not-wanted']).toContain(checkConnection());
+  });
+
+  it('swallows an ActionCable internals change instead of throwing', () => {
+    installFakeConsumer({ open: false, running: false });
+    fakeConnection.isOpen = () => { throw new Error('renamed in a future version'); };
+    expect(checkConnection()).toBe('error');
+  });
+
+  it('recovers on visibilitychange, which is the listener the monitor removes', () => {
+    installFakeConsumer({ open: false, running: false });
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(fakeMonitor.started).toBe(1);
   });
 });

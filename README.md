@@ -81,6 +81,32 @@ configureCable({
 </PresenceProvider>
 ```
 
+### Reconnection
+
+ActionCable reconnects dropped sockets through its own `ConnectionMonitor`, and
+that is still what does the work here. But the monitor can be switched off
+permanently -- `close({allowReconnect: false})` calls `monitor.stop()`, which
+unregisters its `visibilitychange` listener, and nothing in ActionCable
+re-registers it. Rails sends a disconnect with `reconnect: false` for an
+unauthorized or remotely-disconnected connection, so the far end can put a
+browser tab permanently offline.
+
+Since 0.1.16 waldo watches for that: while a connection is wanted it notices a
+stopped monitor and starts it again, on a 10-second interval and on its own
+visibility listener. It does nothing while the monitor is running, so it never
+opens a competing socket, and it never undoes a deliberate `disconnectCable()`.
+
+`checkConnection()` runs one pass on demand and returns what it did, which is
+useful after a resume from sleep or any point an app knows more than a timer
+does:
+
+```jsx
+import { checkConnection } from '@byscott-io/where-is-waldo';
+
+// e.g. after regaining network
+window.addEventListener('online', () => checkConnection());
+```
+
 ### `getToken` and short-lived tokens
 
 `getToken` is called **once per connection attempt**, not once at startup. That
