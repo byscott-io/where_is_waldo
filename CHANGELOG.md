@@ -5,6 +5,41 @@ Notable changes to where_is_waldo. Format loosely follows
 
 ## Unreleased
 
+## 0.1.15 - 2026-11-10
+
+### Fixed
+
+- **A reconnecting client kept sending its ORIGINAL token, forever.** The auth
+  token was read once and baked into the consumer's URL string at first
+  connect. ActionCable's `Consumer` declares `get url()`, which re-runs
+  `createWebSocketURL` on every connection attempt -- so passing a string meant
+  each reconnect after a sleep, a network blip or a server restart reused the
+  token from page load.
+
+  With a short-lived access token that is a silent, permanent failure. The
+  first reconnect after expiry is rejected, every retry sends the same dead
+  token, and the client sits disconnected while looking merely idle. Presence
+  empties and anything broadcast to "online" subscribers reaches nobody. In
+  one case a tab opened a socket and the server closed it 74ms later, rejected,
+  while the application kept working and reported nothing.
+
+  `getConsumer` now hands `createConsumer` a FUNCTION, so the token is resolved
+  per attempt and a refreshed one is picked up by the next retry with no
+  intervention.
+
+### Added
+
+- **`getToken` may now return a promise.** A token provider that has to refresh
+  before it can answer could not be expressed before, because the URL callback
+  is invoked synchronously while opening a socket. An async provider is now
+  resolved in the background and its result cached for the next attempt, which
+  costs at most one refused attempt given ActionCable's backoff. Returning a
+  plain value still works exactly as before and stays synchronous.
+
+- A throwing `getToken` no longer takes the socket down with it. A storage
+  accessor can raise outright with cookies blocked or in a private window; the
+  connection now proceeds without a token and lets the server decide.
+
 ## 0.1.14 - 2026-11-06
 
 ### Fixed

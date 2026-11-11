@@ -42,15 +42,76 @@ export function subscribeToEvent(type, callback) {
  * Configure the ActionCable connection
  * @param {Object} options
  * @param {string} options.url - WebSocket URL (default: '/cable')
- * @param {Function} options.getToken - Function that returns auth token
+ * @param {Function} options.getToken - Returns the auth token, or a promise
+ *   resolving to it. Called once per connection attempt, so returning a
+ *   freshly-refreshed token here is what keeps a long-lived tab connected.
  */
 export function configureCable(options = {}) {
   config = { ...config, ...options };
+  // A new provider invalidates anything cached from the old one.
+  cachedToken = null;
+  tokenInFlight = null;
   // Reset consumer when config changes
   if (consumer) {
     consumer.disconnect();
     consumer = null;
   }
+}
+
+// Last token we managed to resolve, for the case where getToken is async.
+//
+// The URL callback below cannot await: ActionCable calls it synchronously
+// while opening a socket. So an async getToken is resolved in the background
+// and its result cached here for the NEXT connection attempt -- which costs at
+// most one rejected attempt, since ActionCable retries with backoff and the
+// retry re-reads this.
+let cachedToken = null;
+let tokenInFlight = null;
+
+// Resolve getToken, tolerating either a plain value or a promise.
+//
+// Never throws: a token provider that blows up -- a storage accessor can, with
+// cookies blocked or in a private window -- must not take the socket down with
+// it. A missing token simply means the server decides, which is where that
+// decision belongs anyway.
+function resolveToken() {
+  if (!config.getToken) return null;
+
+  let value;
+  try {
+    value = config.getToken();
+  } catch {
+    return cachedToken;
+  }
+
+  if (value && typeof value.then === 'function') {
+    // Async provider: serve the cached value now, refresh it for next time.
+    if (!tokenInFlight) {
+      tokenInFlight = value
+        .then((token) => {
+          if (token) cachedToken = token;
+          return token;
+        })
+        .catch(() => null)
+        .finally(() => {
+          tokenInFlight = null;
+        });
+    }
+    return cachedToken;
+  }
+
+  if (value) cachedToken = value;
+  return value || cachedToken;
+}
+
+// Built fresh for every connection attempt -- see getConsumer.
+function buildUrl() {
+  const url = config.url;
+  const token = resolveToken();
+  if (!token) return url;
+
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
 }
 
 /**
@@ -59,17 +120,21 @@ export function configureCable(options = {}) {
  */
 export function getConsumer() {
   if (!consumer) {
-    let url = config.url;
-
-    if (config.getToken) {
-      const token = config.getToken();
-      if (token) {
-        const separator = url.includes('?') ? '&' : '?';
-        url = `${url}${separator}token=${encodeURIComponent(token)}`;
-      }
-    }
-
-    consumer = createConsumer(url);
+    // A FUNCTION, not a string, and this matters more than it looks.
+    //
+    // ActionCable's Consumer declares `get url()`, which re-runs
+    // createWebSocketURL on EVERY connection attempt, and that helper calls a
+    // function url each time. Passing a string baked the token in at first
+    // connect, so ActionCable's own reconnects -- after a sleep, a network
+    // blip, or a server restart -- reused that original token forever.
+    //
+    // With a short-lived access token that is a silent, permanent failure: the
+    // first reconnect after the token expires is rejected, every retry sends
+    // the same dead token, and the client ends up connected to nothing while
+    // appearing merely idle. Presence empties and any broadcast aimed at
+    // "online" subscribers reaches nobody. Resolving per attempt means a
+    // refreshed token is picked up by the next retry with no intervention.
+    consumer = createConsumer(buildUrl);
   }
 
   return consumer;
