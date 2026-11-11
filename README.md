@@ -81,6 +81,45 @@ configureCable({
 </PresenceProvider>
 ```
 
+### `getToken` and short-lived tokens
+
+`getToken` is called **once per connection attempt**, not once at startup. That
+matters because ActionCable reconnects on its own -- after a sleep, a network
+blip, or a server restart -- and each attempt asks again. So returning the
+current token keeps a long-lived tab connected, while capturing one in a
+closure does not:
+
+```jsx
+// Good: read at call time, so a rotated token is picked up on reconnect.
+getToken: () => localStorage.getItem('token')
+
+// Broken: captured once; every reconnect resends the original token, and once
+// it expires the connection is refused for the life of the page.
+const token = localStorage.getItem('token');
+getToken: () => token
+```
+
+**It may also return a promise**, for a provider that has to refresh before it
+can answer:
+
+```jsx
+getToken: async () => (await auth.freshToken()) || null
+```
+
+The URL callback cannot await -- ActionCable invokes it synchronously while
+opening a socket -- so an async provider is resolved in the background and its
+result used from the next attempt. Given ActionCable's backoff that costs at
+most one refused attempt. The provider is not invoked again while a resolve is
+outstanding, so a reconnect storm will not fire a refresh request per attempt.
+
+Two smaller guarantees:
+
+- Returning `null` from a **synchronous** provider is taken at face value: the
+  socket connects with no token and the server decides. Use that on sign-out.
+- A provider that **throws** does not take the connection down. The last known
+  token is used instead, since a storage accessor can raise outright with
+  cookies blocked or in a private window.
+
 ```jsx
 // any component — subscribe to an event type and filter the payload yourself.
 // Auto-unsubscribes on unmount; no central handler config.
